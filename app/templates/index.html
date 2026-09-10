@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en" class="h-full bg-slate-950">
+<html lang="zh-CN" class="h-full bg-slate-950">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Memray Web Studio - Python Memory Profiler</title>
+  <title>Memray Web Studio - Python 内存诊断与火焰图工作台</title>
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- FontAwesome -->
@@ -38,27 +38,55 @@
   <!-- Navigation Header -->
   <header class="bg-cardbg border-b border-bordercol px-6 py-3 flex items-center justify-between flex-shrink-0 z-20">
     <div class="flex items-center gap-3">
-      <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-500 flex items-center justify-center text-darkbg shadow-lg shadow-orange-500/20 text-lg">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-500 flex items-center justify-center text-darkbg shadow-lg shadow-orange-500/20 text-lg flex-shrink-0">
         <i class="fa-solid fa-fire"></i>
       </div>
       <div>
         <div class="flex items-center gap-2">
-          <h1 class="text-base font-bold text-white tracking-wide">Memray Web Studio</h1>
+          <h1 class="text-base font-bold text-white tracking-wide" data-i18n="appTitle">Memray Web Studio</h1>
           <span class="text-[10px] px-2 py-0.5 rounded bg-orange-500/10 text-orange-400 border border-orange-500/20 font-mono">v1.20</span>
           <span class="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-bordercol font-mono">Bloomberg OSS</span>
         </div>
-        <p class="text-xs text-slate-400">Interactive memory profiling, flame graphs & allocation diagnostics for Python</p>
+        <p class="text-xs text-slate-400" data-i18n="appSubtitle">交互式 Python 内存分析、火焰图诊断与分配回溯工作台</p>
       </div>
     </div>
 
-    <!-- Right Controls -->
-    <div class="flex items-center gap-3">
+    <!-- Right Controls: Language Toggle, Guide, History, Docs -->
+    <div class="flex items-center gap-2.5">
+      <!-- Language Switcher -->
+      <div class="flex items-center bg-slate-900 rounded-lg p-0.5 border border-bordercol text-xs font-semibold">
+        <button
+          onclick="setLanguage('zh')"
+          id="lang-btn-zh"
+          class="px-2.5 py-1 rounded-md transition text-slate-400 hover:text-white"
+        >
+          中文
+        </button>
+        <button
+          onclick="setLanguage('en')"
+          id="lang-btn-en"
+          class="px-2.5 py-1 rounded-md transition text-slate-400 hover:text-white"
+        >
+          EN
+        </button>
+      </div>
+
+      <!-- Quick Guide Modal Trigger -->
+      <button
+        onclick="toggleGuideModal(true)"
+        class="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-xs font-medium text-cyan-400 border border-cyan-500/30 flex items-center gap-1.5 transition"
+      >
+        <i class="fa-solid fa-circle-question"></i>
+        <span data-i18n="navGuide">诊断指南</span>
+      </button>
+
+      <!-- History Trigger -->
       <button
         onclick="toggleHistoryDrawer()"
-        class="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-xs font-medium text-slate-300 border border-bordercol flex items-center gap-2 transition"
+        class="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-xs font-medium text-slate-300 border border-bordercol flex items-center gap-1.5 transition"
       >
         <i class="fa-solid fa-clock-rotate-left text-slate-400"></i>
-        <span>History</span>
+        <span data-i18n="navHistory">历史记录</span>
         <span id="history-badge" class="px-1.5 py-0.2 rounded-full bg-slate-800 text-[10px] text-teal-400">0</span>
       </button>
 
@@ -68,7 +96,7 @@
         class="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-xs text-slate-400 hover:text-white border border-bordercol flex items-center gap-1.5 transition"
       >
         <i class="fa-brands fa-github"></i>
-        <span>Docs</span>
+        <span>GitHub</span>
       </a>
     </div>
   </header>
@@ -83,18 +111,19 @@
       <div class="px-4 py-2.5 bg-slate-900/90 border-b border-bordercol flex items-center justify-between text-xs">
         <div class="flex items-center gap-2">
           <span class="font-semibold text-slate-300 flex items-center gap-1.5">
-            <i class="fa-brands fa-python text-amber-400"></i> Python Code
+            <i class="fa-brands fa-python text-amber-400"></i>
+            <span data-i18n="editorTitle">Python 待测代码</span>
           </span>
           <select
             id="preset-select"
             onchange="loadPreset(this.value)"
             class="bg-slate-950 border border-bordercol rounded px-2.5 py-1 text-xs text-slate-300 focus:outline-none focus:border-cyan-500 transition"
           >
-            <option value="leak">Preset: Memory Leak (Growing List)</option>
-            <option value="pandas">Preset: Pandas GroupBy & Merge</option>
-            <option value="generator">Preset: List vs Generator (Lazy)</option>
-            <option value="recursion">Preset: Deep Call Stack</option>
-            <option value="custom">Custom Code</option>
+            <option value="leak" data-i18n="presetLeak">预设：内存泄漏模拟（持续累加未释放）</option>
+            <option value="pandas" data-i18n="presetPandas">预设：Pandas 大表合并与聚合内存尖峰</option>
+            <option value="generator" data-i18n="presetGenerator">预设：列表推导 vs 惰性生成器（100倍差距）</option>
+            <option value="recursion" data-i18n="presetRecursion">预设：深度调用栈递归分配</option>
+            <option value="custom" data-i18n="presetCustom">自定义代码</option>
           </select>
         </div>
 
@@ -102,10 +131,11 @@
           <label
             for="file-upload-input"
             class="cursor-pointer px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-bordercol transition flex items-center gap-1.5"
-            title="Upload .py script or .bin Memray capture file"
+            data-i18n-title="uploadTooltip"
+            title="上传 .py 脚本或外部采集的 .bin 采样文件"
           >
             <i class="fa-solid fa-file-arrow-up text-cyan-400"></i>
-            <span>Upload</span>
+            <span data-i18n="btnUpload">上传</span>
           </label>
           <input type="file" id="file-upload-input" class="hidden" accept=".py,.bin" onchange="handleFileUpload(this.files)" />
         </div>
@@ -117,21 +147,21 @@
           id="code-editor"
           spellcheck="false"
           class="code-font flex-1 p-4 bg-transparent text-emerald-300 text-xs leading-relaxed focus:outline-none resize-none overflow-y-auto border-none"
-          placeholder="# Write Python code here to profile..."
+          placeholder="# 在此编写或粘贴要诊断的 Python 代码..."
         ></textarea>
       </div>
 
       <!-- Profiling Options & Run Bar -->
       <div class="p-4 bg-slate-900 border-t border-bordercol space-y-3">
-        <!-- Switches -->
-        <div class="flex flex-wrap items-center gap-4 text-xs text-slate-400">
-          <label class="flex items-center gap-1.5 cursor-pointer hover:text-slate-200">
+        <!-- Switches with detailed explanations -->
+        <div class="flex flex-col sm:flex-row items-start sm:items-center gap-3 text-xs text-slate-400">
+          <label class="flex items-center gap-1.5 cursor-pointer hover:text-slate-200" title="跟踪 C/C++ 库（如 NumPy、PyTorch 等 C 扩展）直接通过 malloc 分配的内存">
             <input type="checkbox" id="opt-native" class="rounded bg-slate-950 border-bordercol text-cyan-500 focus:ring-0" />
-            <span>Trace C/C++ Native (<code class="text-cyan-400">--native</code>)</span>
+            <span data-i18n="optNative">追踪 C/C++ 底层扩展分配 (<code class="text-cyan-400 font-mono">--native</code>)</span>
           </label>
-          <label class="flex items-center gap-1.5 cursor-pointer hover:text-slate-200">
+          <label class="flex items-center gap-1.5 cursor-pointer hover:text-slate-200" title="追踪 Python 解释器内部 PyMalloc 的微对象池内存">
             <input type="checkbox" id="opt-allocators" class="rounded bg-slate-950 border-bordercol text-cyan-500 focus:ring-0" />
-            <span>Trace PyMalloc (<code class="text-cyan-400">--trace-python-allocators</code>)</span>
+            <span data-i18n="optAllocators">追踪 Python 微对象池 (<code class="text-cyan-400 font-mono">--trace-python-allocators</code>)</span>
           </label>
         </div>
 
@@ -143,12 +173,13 @@
             class="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-darkbg font-bold shadow-lg shadow-orange-500/20 flex items-center justify-center gap-2 text-sm transition"
           >
             <i class="fa-solid fa-play"></i>
-            <span>Profile Memory</span>
+            <span data-i18n="btnProfile">开始内存采样分析</span>
           </button>
           <button
             onclick="clearEditor()"
             class="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white border border-bordercol text-xs transition"
-            title="Clear editor"
+            data-i18n-title="btnClearTitle"
+            title="清空编辑器"
           >
             <i class="fa-solid fa-trash-can"></i>
           </button>
@@ -162,18 +193,27 @@
       <!-- Metrics Overview Bar (Shown after run) -->
       <div id="metrics-bar" class="hidden px-6 py-3 bg-slate-900/70 border-b border-bordercol flex flex-wrap items-center justify-between gap-4">
         <div class="flex items-center gap-6">
-          <div>
-            <span class="text-[11px] uppercase tracking-wider text-slate-500 font-semibold block">Peak Memory</span>
+          <div title="代码在整个运行期间瞬时达到的最高内存占用总量">
+            <span class="text-[11px] uppercase tracking-wider text-slate-400 font-semibold block flex items-center gap-1">
+              <span data-i18n="metricPeak">峰值内存占用</span>
+              <i class="fa-solid fa-circle-info text-[10px] text-slate-500"></i>
+            </span>
             <span id="metric-peak" class="text-lg font-bold text-orange-400 font-mono">0 B</span>
           </div>
           <div class="h-7 w-px bg-bordercol"></div>
-          <div>
-            <span class="text-[11px] uppercase tracking-wider text-slate-500 font-semibold block">Allocations</span>
+          <div title="代码执行过程中向操作系统或解释器申请内存的总次数">
+            <span class="text-[11px] uppercase tracking-wider text-slate-400 font-semibold block flex items-center gap-1">
+              <span data-i18n="metricAllocs">内存分配调用次数</span>
+              <i class="fa-solid fa-circle-info text-[10px] text-slate-500"></i>
+            </span>
             <span id="metric-allocs" class="text-lg font-bold text-cyan-400 font-mono">0</span>
           </div>
           <div class="h-7 w-px bg-bordercol"></div>
-          <div>
-            <span class="text-[11px] uppercase tracking-wider text-slate-500 font-semibold block">Execution Time</span>
+          <div title="Python 代码实际执行的总时长">
+            <span class="text-[11px] uppercase tracking-wider text-slate-400 font-semibold block flex items-center gap-1">
+              <span data-i18n="metricTime">执行运行耗时</span>
+              <i class="fa-solid fa-circle-info text-[10px] text-slate-500"></i>
+            </span>
             <span id="metric-time" class="text-lg font-bold text-emerald-400 font-mono">0s</span>
           </div>
         </div>
@@ -185,20 +225,22 @@
             href="#"
             target="_blank"
             class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 border border-bordercol flex items-center gap-1.5 transition"
-            title="Download standalone Flamegraph HTML"
+            data-i18n-title="dlFlameTitle"
+            title="下载独立离线 HTML 火焰图"
           >
             <i class="fa-solid fa-download text-orange-400"></i>
-            <span>HTML Flame</span>
+            <span data-i18n="btnDlFlame">下载火焰图</span>
           </a>
           <a
             id="dl-bin"
             href="#"
             target="_blank"
             class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 border border-bordercol flex items-center gap-1.5 transition"
-            title="Download raw .bin capture"
+            data-i18n-title="dlBinTitle"
+            title="下载原始二进制采样文件 (.bin)"
           >
             <i class="fa-solid fa-floppy-disk text-cyan-400"></i>
-            <span>Raw .bin</span>
+            <span data-i18n="btnDlBin">下载 .bin 采样</span>
           </a>
         </div>
       </div>
@@ -207,44 +249,58 @@
       <div class="px-6 bg-cardbg border-b border-bordercol flex items-center justify-between flex-shrink-0">
         <div class="flex space-x-1" id="report-nav-tabs">
           <button onclick="switchTab('flame')" id="tab-btn-flame" class="py-2.5 px-4 text-xs font-semibold border-b-2 border-orange-500 text-orange-400 flex items-center gap-2">
-            <i class="fa-solid fa-fire"></i> Flame Graph
+            <i class="fa-solid fa-fire"></i> <span data-i18n="tabFlame">火焰图 (Flame Graph)</span>
           </button>
           <button onclick="switchTab('table')" id="tab-btn-table" class="py-2.5 px-4 text-xs font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2">
-            <i class="fa-solid fa-table"></i> Allocation Table
+            <i class="fa-solid fa-table"></i> <span data-i18n="tabTable">内存分布表 (Table)</span>
           </button>
           <button onclick="switchTab('stats')" id="tab-btn-stats" class="py-2.5 px-4 text-xs font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2">
-            <i class="fa-solid fa-chart-pie"></i> Stats & Top Sites
+            <i class="fa-solid fa-chart-pie"></i> <span data-i18n="tabStats">统计指标与 Top 消耗</span>
           </button>
           <button onclick="switchTab('console')" id="tab-btn-console" class="py-2.5 px-4 text-xs font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2">
-            <i class="fa-solid fa-terminal"></i> Terminal & Summary
+            <i class="fa-solid fa-terminal"></i> <span data-i18n="tabConsole">控制台日志与摘要</span>
           </button>
         </div>
         <div id="status-indicator" class="text-xs text-slate-500 flex items-center gap-1.5">
-          <span class="w-2 h-2 rounded-full bg-emerald-500"></span> Ready
+          <span class="w-2 h-2 rounded-full bg-emerald-500"></span> <span data-i18n="statusReady">就绪</span>
         </div>
       </div>
 
       <!-- View Containers -->
-      <div class="flex-1 relative overflow-hidden bg-slate-950">
+      <div class="flex-1 relative overflow-hidden bg-slate-950 flex flex-col">
         
         <!-- Tab 1: Flamegraph iframe -->
         <div id="pane-flame" class="absolute inset-0 flex flex-col">
-          <iframe id="iframe-flame" class="w-full h-full border-none bg-white" src="about:blank"></iframe>
+          <!-- Context Tip Header -->
+          <div class="px-6 py-2 bg-slate-900/90 border-b border-bordercol text-[11px] text-slate-400 flex items-center justify-between">
+            <span class="flex items-center gap-1.5">
+              <i class="fa-solid fa-lightbulb text-amber-400"></i>
+              <span data-i18n="tipFlame">💡 火焰图速读：色块宽度代表内存体积，越宽占用越大；纵向自下而上为函数调用栈；点击色块可聚焦放大下钻。</span>
+            </span>
+          </div>
+          <iframe id="iframe-flame" class="flex-1 w-full border-none bg-white" src="about:blank"></iframe>
           <!-- Empty State -->
           <div id="empty-flame" class="absolute inset-0 bg-slate-950 flex flex-col items-center justify-center p-8 text-center">
             <div class="w-16 h-16 rounded-2xl bg-orange-500/10 text-orange-400 border border-orange-500/20 flex items-center justify-center text-3xl mb-4">
               <i class="fa-solid fa-fire"></i>
             </div>
-            <h3 class="text-lg font-bold text-white mb-1">No Flame Graph Yet</h3>
-            <p class="text-xs text-slate-400 max-w-sm">Click "Profile Memory" on the left or upload a script / .bin file to generate an interactive memory flame graph.</p>
+            <h3 class="text-lg font-bold text-white mb-1" data-i18n="emptyFlameTitle">暂无火焰图报表</h3>
+            <p class="text-xs text-slate-400 max-w-sm" data-i18n="emptyFlameDesc">点击左侧「开始内存采样分析」按钮，或上传一个 Python 脚本 / 外部采集的 .bin 文件即可生成交互式内存火焰图。</p>
           </div>
         </div>
 
         <!-- Tab 2: Table iframe -->
         <div id="pane-table" class="absolute inset-0 hidden flex flex-col">
-          <iframe id="iframe-table" class="w-full h-full border-none bg-white" src="about:blank"></iframe>
+          <!-- Context Tip Header -->
+          <div class="px-6 py-2 bg-slate-900/90 border-b border-bordercol text-[11px] text-slate-400 flex items-center justify-between">
+            <span class="flex items-center gap-1.5">
+              <i class="fa-solid fa-lightbulb text-amber-400"></i>
+              <span data-i18n="tipTable">💡 内存分布表速读：Total Memory 包含子调用总内存；Own Memory 是该函数本身直接分配的内存（定位泄漏的核心依据）。</span>
+            </span>
+          </div>
+          <iframe id="iframe-table" class="flex-1 w-full border-none bg-white" src="about:blank"></iframe>
           <div id="empty-table" class="absolute inset-0 bg-slate-950 flex flex-col items-center justify-center p-8 text-center">
-            <p class="text-xs text-slate-500">Run a profile to view the memory allocation table.</p>
+            <p class="text-xs text-slate-500" data-i18n="emptyTableDesc">运行采样后将在此展示分级内存分配统计表。</p>
           </div>
         </div>
 
@@ -253,21 +309,29 @@
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <!-- Top Allocations by Size -->
             <div class="bg-cardbg border border-bordercol rounded-xl p-5 shadow-lg">
-              <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-2">
-                <i class="fa-solid fa-arrow-up-wide-short text-orange-400"></i> Top Allocations by Size
-              </h4>
+              <div class="flex items-center justify-between mb-3">
+                <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                  <i class="fa-solid fa-arrow-up-wide-short text-orange-400"></i>
+                  <span data-i18n="cardTopAlloc">按体积排名前五的代码分配点</span>
+                </h4>
+              </div>
+              <p class="text-[11px] text-slate-500 mb-3" data-i18n="descTopAlloc">直接消耗内存最多的前 5 处代码行位置及其分配量：</p>
               <div id="top-alloc-size-list" class="space-y-2 text-xs font-mono">
-                <span class="text-slate-500 italic">No data</span>
+                <span class="text-slate-500 italic" data-i18n="noData">暂无数据</span>
               </div>
             </div>
 
             <!-- Allocator Distribution -->
             <div class="bg-cardbg border border-bordercol rounded-xl p-5 shadow-lg">
-              <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-2">
-                <i class="fa-solid fa-layer-group text-cyan-400"></i> Allocator Types
-              </h4>
+              <div class="flex items-center justify-between mb-3">
+                <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                  <i class="fa-solid fa-layer-group text-cyan-400"></i>
+                  <span data-i18n="cardAllocators">系统分配器调用频次</span>
+                </h4>
+              </div>
+              <p class="text-[11px] text-slate-500 mb-3" data-i18n="descAllocators">底层 C 运行时内存调用次数分布：</p>
               <div id="allocator-dist-list" class="space-y-2 text-xs font-mono">
-                <span class="text-slate-500 italic">No data</span>
+                <span class="text-slate-500 italic" data-i18n="noData">暂无数据</span>
               </div>
             </div>
           </div>
@@ -275,7 +339,8 @@
           <!-- Raw Stats JSON -->
           <div class="bg-cardbg border border-bordercol rounded-xl p-5 shadow-lg">
             <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-2">
-              <i class="fa-solid fa-code text-emerald-400"></i> Detailed Stats Metadata
+              <i class="fa-solid fa-code text-emerald-400"></i>
+              <span data-i18n="cardRawStats">底层指标原始元数据 (Stats JSON)</span>
             </h4>
             <pre id="raw-stats-json" class="p-4 rounded bg-slate-950 text-emerald-300 text-xs code-font overflow-x-auto max-h-80"></pre>
           </div>
@@ -285,14 +350,16 @@
         <div id="pane-console" class="absolute inset-0 hidden overflow-y-auto p-6 space-y-4">
           <div class="bg-slate-900 border border-bordercol rounded-xl p-4">
             <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-2">
-              <i class="fa-solid fa-table-list text-cyan-400"></i> Memray Summary Table
+              <i class="fa-solid fa-table-list text-cyan-400"></i>
+              <span data-i18n="cardCliSummary">Memray CLI 格式化内存摘要</span>
             </h4>
-            <pre id="summary-output" class="text-xs font-mono text-slate-300 whitespace-pre overflow-x-auto">No summary available</pre>
+            <pre id="summary-output" class="text-xs font-mono text-slate-300 whitespace-pre overflow-x-auto">暂无摘要输出</pre>
           </div>
 
           <div class="bg-slate-900 border border-bordercol rounded-xl p-4">
             <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-2">
-              <i class="fa-solid fa-terminal text-slate-400"></i> Standard Output & Logs
+              <i class="fa-solid fa-terminal text-slate-400"></i>
+              <span data-i18n="cardStdLogs">Python 执行标准输出与错误日志</span>
             </h4>
             <pre id="stdout-output" class="text-xs font-mono text-emerald-400 whitespace-pre overflow-x-auto"></pre>
             <pre id="stderr-output" class="text-xs font-mono text-rose-400 whitespace-pre overflow-x-auto mt-2"></pre>
@@ -307,7 +374,8 @@
   <div id="history-drawer" class="fixed inset-y-0 right-0 w-80 bg-cardbg border-l border-bordercol shadow-2xl z-30 transform translate-x-full transition-transform duration-200 flex flex-col">
     <div class="p-4 border-b border-bordercol flex items-center justify-between">
       <h3 class="font-bold text-sm text-white flex items-center gap-2">
-        <i class="fa-solid fa-clock-rotate-left text-teal-400"></i> Profiling History
+        <i class="fa-solid fa-clock-rotate-left text-teal-400"></i>
+        <span data-i18n="drawerHistoryTitle">历史采样记录</span>
       </h3>
       <button onclick="toggleHistoryDrawer()" class="text-slate-400 hover:text-white text-sm">
         <i class="fa-solid fa-xmark"></i>
@@ -318,6 +386,40 @@
     </div>
   </div>
 
+  <!-- Quick Guide Modal -->
+  <div id="guide-modal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-cardbg border border-bordercol rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+      <!-- Modal Header -->
+      <div class="p-5 border-b border-bordercol flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-lg bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 flex items-center justify-center">
+            <i class="fa-solid fa-book-open"></i>
+          </div>
+          <h3 class="text-base font-bold text-white" data-i18n="modalGuideTitle">Memray 内存诊断速成指南</h3>
+        </div>
+        <button onclick="toggleGuideModal(false)" class="text-slate-400 hover:text-white">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body -->
+      <div class="p-6 overflow-y-auto space-y-4 text-xs text-slate-300 leading-relaxed" id="guide-content">
+        <!-- Rendered dynamically by current language -->
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="p-4 bg-slate-900 border-t border-bordercol flex justify-end">
+        <button
+          onclick="toggleGuideModal(false)"
+          class="px-5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-darkbg font-bold transition text-xs"
+          data-i18n="btnCloseModal"
+        >
+          我知道了
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast Message -->
   <div id="toast" class="fixed bottom-6 right-6 px-4 py-2.5 rounded-xl bg-slate-900 border border-bordercol text-xs text-white shadow-2xl z-50 transform translate-y-20 opacity-0 transition-all duration-300 flex items-center gap-2">
     <i id="toast-icon" class="fa-solid fa-circle-check text-emerald-400"></i>
@@ -325,9 +427,279 @@
   </div>
 
   <script>
-    // Presets definitions
+    // i18n Dictionaries
+    const I18N = {
+      zh: {
+        appTitle: "Memray Web Studio",
+        appSubtitle: "交互式 Python 内存分析、火焰图诊断与分配回溯工作台",
+        navGuide: "诊断指南",
+        navHistory: "历史记录",
+        editorTitle: "Python 待测代码",
+        presetLeak: "预设：内存泄漏模拟（持续累加未释放）",
+        presetPandas: "预设：Pandas 大表合并与聚合内存尖峰",
+        presetGenerator: "预设：列表推导 vs 惰性生成器（100倍差距）",
+        presetRecursion: "预设：深度调用栈递归分配",
+        presetCustom: "自定义代码",
+        btnUpload: "上传",
+        uploadTooltip: "上传 .py 脚本或外部采集的 .bin 采样文件",
+        optNative: "追踪 C/C++ 底层扩展分配 (--native)",
+        optAllocators: "追踪 Python 微对象池 (--trace-python-allocators)",
+        btnProfile: "开始内存采样分析",
+        btnClearTitle: "清空编辑器",
+        metricPeak: "峰值内存占用",
+        metricAllocs: "内存分配调用次数",
+        metricTime: "执行运行耗时",
+        btnDlFlame: "下载火焰图",
+        btnDlBin: "下载 .bin 采样",
+        dlFlameTitle: "下载独立离线 HTML 火焰图",
+        dlBinTitle: "下载原始二进制采样文件 (.bin)",
+        tabFlame: "火焰图 (Flame Graph)",
+        tabTable: "内存分布表 (Table)",
+        tabStats: "统计指标与 Top 消耗",
+        tabConsole: "控制台日志与摘要",
+        statusReady: "就绪",
+        statusProfiling: "正在采样分析中...",
+        tipFlame: "💡 火焰图速读：色块宽度代表内存体积，越宽占用越大；纵向自下而上为函数调用栈；点击色块可聚焦放大下钻，支持上方关键词搜索。",
+        tipTable: "💡 内存分布表速读：Total Memory 包含子调用总内存；Own Memory 是该函数本身直接分配的内存（定位泄漏的核心依据）。",
+        emptyFlameTitle: "暂无火焰图报表",
+        emptyFlameDesc: "点击左侧「开始内存采样分析」按钮，或上传一个 Python 脚本 / 外部采集的 .bin 文件即可生成交互式内存火焰图。",
+        emptyTableDesc: "运行采样后将在此展示分级内存分配统计表。",
+        cardTopAlloc: "按体积排名前五的代码分配点",
+        descTopAlloc: "直接消耗内存最多的前 5 处代码行位置及其分配量：",
+        cardAllocators: "系统分配器调用频次",
+        descAllocators: "底层 C 运行时内存调用次数分布：",
+        cardRawStats: "底层指标原始元数据 (Stats JSON)",
+        cardCliSummary: "Memray CLI 格式化内存摘要",
+        cardStdLogs: "Python 执行标准输出与错误日志",
+        drawerHistoryTitle: "历史采样记录",
+        modalGuideTitle: "Memray 内存诊断速成指南",
+        btnCloseModal: "我知道了",
+        noData: "暂无数据",
+        noSummary: "暂无摘要输出",
+        noHistory: "暂无历史采样记录",
+        confirmDelete: "确定删除这条采样记录吗？",
+        toastRunDeleted: "记录已删除",
+        toastProfileDone: "采样分析完成！峰值内存：",
+        toastLoadedFile: "文件已解析并就绪！峰值：",
+        toastUploading: "正在上传并分析 ",
+        toastEnterCode: "请输入要测试的 Python 代码。",
+        guideHtml: `
+          <div class="space-y-3">
+            <div class="p-3 bg-slate-900 rounded-xl border border-bordercol">
+              <h4 class="font-bold text-white mb-1 flex items-center gap-2">
+                <i class="fa-solid fa-fire text-orange-400"></i> 1. 如何看懂火焰图（Flame Graph）？
+              </h4>
+              <p class="text-slate-400">
+                - <b>色块宽度</b>：横条越宽，代表该函数（或调用路径）在内存分配中占据的<b>体积越大</b>。<br/>
+                - <b>调用纵深</b>：从下往上是调用层级（最底部是 <code>&lt;root&gt;</code>，往上是调用的子函数，顶端是具体分配内存的代码行）。<br/>
+                - <b>寻找瓶颈</b>：寻找最宽的<b>“平顶”色块</b>，这通常就是占用内存的核心元凶。
+              </p>
+            </div>
+
+            <div class="p-3 bg-slate-900 rounded-xl border border-bordercol">
+              <h4 class="font-bold text-white mb-1 flex items-center gap-2">
+                <i class="fa-solid fa-table text-cyan-400"></i> 2. 内存分布表（Table）的两大指标
+              </h4>
+              <p class="text-slate-400">
+                - <b>Total Memory</b>：包含该函数自身及它调用的所有下游子函数分配的总内存。<br/>
+                - <b>Own Memory</b>：<b>该函数自身代码直接分配</b>的内存（排查具体哪一行代码泄漏的黄金指标）。
+              </p>
+            </div>
+
+            <div class="p-3 bg-slate-900 rounded-xl border border-bordercol">
+              <h4 class="font-bold text-white mb-1 flex items-center gap-2">
+                <i class="fa-solid fa-wrench text-emerald-400"></i> 3. 常见 Python 内存优化技巧
+              </h4>
+              <p class="text-slate-400">
+                - <b>避免一次性大列表</b>：使用 <code>yield</code> 生成器代替 <code>[x for x in ...]</code> 列表推导，内存可直降 99%。<br/>
+                - <b>Pandas 分块处理</b>：读取超大 CSV 时使用 <code>pd.read_csv(..., chunksize=10000)</code> 进行流式计算。<br/>
+                - <b>及时释放大对象</b>：不再使用的超大数组或数据，及时调用 <code>del var</code> 或避免放入全局全局列表。
+              </p>
+            </div>
+          </div>
+        `
+      },
+      en: {
+        appTitle: "Memray Web Studio",
+        appSubtitle: "Interactive memory profiling, flame graphs & allocation diagnostics for Python",
+        navGuide: "Guide",
+        navHistory: "History",
+        editorTitle: "Python Code",
+        presetLeak: "Preset: Memory Leak (Growing List)",
+        presetPandas: "Preset: Pandas GroupBy & Merge Spikes",
+        presetGenerator: "Preset: List vs Generator (Lazy)",
+        presetRecursion: "Preset: Deep Call Stack",
+        presetCustom: "Custom Code",
+        btnUpload: "Upload",
+        uploadTooltip: "Upload .py script or external .bin capture file",
+        optNative: "Trace C/C++ Native Allocations (--native)",
+        optAllocators: "Trace PyMalloc Pool (--trace-python-allocators)",
+        btnProfile: "Profile Memory",
+        btnClearTitle: "Clear editor",
+        metricPeak: "Peak Memory",
+        metricAllocs: "Allocations Count",
+        metricTime: "Execution Time",
+        btnDlFlame: "HTML Flame",
+        btnDlBin: "Raw .bin",
+        dlFlameTitle: "Download standalone Flamegraph HTML",
+        dlBinTitle: "Download raw binary profile (.bin)",
+        tabFlame: "Flame Graph",
+        tabTable: "Allocation Table",
+        tabStats: "Stats & Top Sites",
+        tabConsole: "Terminal & Summary",
+        statusReady: "Ready",
+        statusProfiling: "Profiling memory...",
+        tipFlame: "💡 How to read: Bar width represents memory size; vertical axis is call stack. Click any frame to zoom in, use search bar above to filter.",
+        tipTable: "💡 Table guide: Total Memory includes child calls; Own Memory is allocated directly by this function (crucial for finding leaks).",
+        emptyFlameTitle: "No Flame Graph Yet",
+        emptyFlameDesc: "Click 'Profile Memory' on the left or upload a script / .bin file to generate an interactive memory flame graph.",
+        emptyTableDesc: "Run a profile to view the memory allocation table.",
+        cardTopAlloc: "Top 5 Allocations by Size",
+        descTopAlloc: "Top code locations that allocated the largest amount of memory directly:",
+        cardAllocators: "Allocator Call Counts",
+        descAllocators: "Breakdown of underlying C memory allocators used:",
+        cardRawStats: "Detailed Stats Metadata (JSON)",
+        cardCliSummary: "Memray CLI Formatted Summary",
+        cardStdLogs: "Standard Output & Error Logs",
+        drawerHistoryTitle: "Profiling History",
+        modalGuideTitle: "Memray Quickstart & Diagnostics Guide",
+        btnCloseModal: "Got it",
+        noData: "No data",
+        noSummary: "No summary available",
+        noHistory: "No profiling sessions yet",
+        confirmDelete: "Delete this profiling run?",
+        toastRunDeleted: "Run deleted",
+        toastProfileDone: "Profile finished! Peak: ",
+        toastLoadedFile: "Loaded and analyzed! Peak: ",
+        toastUploading: "Uploading and analyzing ",
+        toastEnterCode: "Please enter some Python code to profile.",
+        guideHtml: `
+          <div class="space-y-3">
+            <div class="p-3 bg-slate-900 rounded-xl border border-bordercol">
+              <h4 class="font-bold text-white mb-1 flex items-center gap-2">
+                <i class="fa-solid fa-fire text-orange-400"></i> 1. How to Read a Flame Graph?
+              </h4>
+              <p class="text-slate-400">
+                - <b>Bar Width</b>: Represents memory size. The wider the bar, the more memory that code path consumed.<br/>
+                - <b>Call Stack</b>: Vertical axis shows hierarchy (bottom is <code>&lt;root&gt;</code>, top is the actual allocating code line).<br/>
+                - <b>Finding Culprits</b>: Look for wide <b>plateaus (flat tops)</b> on top of stacks—these are primary memory hogs.
+              </p>
+            </div>
+
+            <div class="p-3 bg-slate-900 rounded-xl border border-bordercol">
+              <h4 class="font-bold text-white mb-1 flex items-center gap-2">
+                <i class="fa-solid fa-table text-cyan-400"></i> 2. Total Memory vs. Own Memory
+              </h4>
+              <p class="text-slate-400">
+                - <b>Total Memory</b>: Sum of memory allocated by this function plus all downstream functions it called.<br/>
+                - <b>Own Memory</b>: Memory allocated <b>directly inside this function's body</b> (the key metric for pinpointing leaks).
+              </p>
+            </div>
+
+            <div class="p-3 bg-slate-900 rounded-xl border border-bordercol">
+              <h4 class="font-bold text-white mb-1 flex items-center gap-2">
+                <i class="fa-solid fa-wrench text-emerald-400"></i> 3. Memory Optimization Best Practices
+              </h4>
+              <p class="text-slate-400">
+                - <b>Use Generators</b>: Replace eager list comprehensions <code>[x for x in ...]</code> with lazy <code>(x for x in ...)</code> generators to reduce footprint by up to 99%.<br/>
+                - <b>Stream Data in Pandas</b>: Process giant CSVs with <code>pd.read_csv(..., chunksize=10000)</code>.<br/>
+                - <b>Dereference Unused Objects</b>: Clear global lists or explicitly call <code>del</code> on temporary large arrays.
+              </p>
+            </div>
+          </div>
+        `
+      }
+    };
+
+    let currentLang = localStorage.getItem('memray_lang') || 'zh';
+
+    // Preset Code Definitions with rich bilingual comments
     const PRESETS = {
-      leak: `# Memory Leak Demo
+      zh: {
+        leak: `# 🧪 内存泄漏模拟 (Memory Leak Simulation)
+# 演示在全局或长生命周期的集合中持续追加大对象且未被清理的现象
+
+def simulate_leak():
+    # 模拟一个没有被适时释放的缓存列表
+    leaked_cache = []
+    
+    print("开始模拟内存分配...")
+    for step in range(30):
+        # 每次循环申请 1MB (1024 * 1024 字节) 的 bytearray 块
+        chunk = bytearray(1024 * 1024)
+        leaked_cache.append(chunk)
+    
+    return len(leaked_cache)
+
+total_chunks = simulate_leak()
+print(f"模拟完成！共持有 {total_chunks} 个数据块，累计约 30MB 内存未释放。")
+`,
+        pandas: `# 🧪 Pandas 大表关联与分组聚合 (DataFrame Merge & GroupBy)
+# 演示数据科学场景下创建大型 DataFrame 及中间表运算导致的内存激增
+
+import pandas as pd
+import numpy as np
+
+print("生成随机测试数据集...")
+# 构造包含 20 万行记录的左表
+df_left = pd.DataFrame({
+    'user_id': np.random.randint(0, 10000, size=200000),
+    'feature_a': np.random.randn(200000),
+    'feature_b': np.random.randn(200000)
+})
+
+# 构造包含 10 万行记录的右表
+df_right = pd.DataFrame({
+    'user_id': np.random.randint(0, 10000, size=100000),
+    'score': np.random.randn(100000)
+})
+
+print("执行内连接合并 (Inner Merge) 会触发显著的内存尖峰...")
+merged = df_left.merge(df_right, on='user_id', how='inner')
+
+print("执行分组求均值聚合...")
+grouped = merged.groupby('user_id').mean()
+print(f"处理完成！合并后数据形状: {merged.shape}, 聚合结果: {grouped.shape}")
+`,
+        generator: `# 🧪 列表推导 vs 惰性生成器 (Eager List vs Lazy Generator)
+# 演示急切求值与惰性迭代器在百倍级别上的巨大内存差异
+
+def eager_list_demo():
+    # 立即在内存中一次性分配 500,000 个整数对象的数组
+    return [x * 2 for x in range(500000)]
+
+def lazy_generator_demo():
+    # 使用 () 惰性生成器表达式，按需 yield 计算，内存占用接近为 0
+    return (x * 2 for x in range(500000))
+
+print("1. 测试急切列表推导式 (Eager List)...")
+list_data = eager_list_demo()
+sum1 = sum(list_data)
+
+print("2. 测试惰性生成器 (Lazy Generator)...")
+gen_data = lazy_generator_demo()
+sum2 = sum(gen_data)
+
+print(f"计算结果一致性: {sum1 == sum2}，请在火焰图中查看两者内存体积极差！")
+`,
+        recursion: `# 🧪 深度递归调用栈与对象分配 (Recursive Call Stack)
+# 演示深层递归展开时的调用栈与列表拼接开销
+
+def recursive_tree(depth):
+    if depth <= 1:
+        return [depth]
+    # 每一层递归均在堆上分配并合并列表
+    left = recursive_tree(depth - 1)
+    right = recursive_tree(depth - 2)
+    return left + right
+
+print("执行深层递归树计算...")
+result = recursive_tree(14)
+print(f"递归展开完成，生成的节点总数: {len(result)}")
+`
+      },
+      en: {
+        leak: `# Memory Leak Demo
 # Continuously allocates blocks into a list without freeing
 def simulate_leak():
     leaked_data = []
@@ -340,7 +712,7 @@ def simulate_leak():
 simulate_leak()
 print("Leak simulation finished. Total ~30MB allocated.")
 `,
-      pandas: `# Pandas DataFrame Operations
+        pandas: `# Pandas DataFrame Operations
 import pandas as pd
 import numpy as np
 
@@ -361,7 +733,7 @@ merged = df1.merge(df2, on='key', how='inner')
 grouped = merged.groupby('key').mean()
 print(f"Data merged: {merged.shape}, Grouped: {grouped.shape}")
 `,
-      generator: `# Eager List Comprehension vs Lazy Generator
+        generator: `# Eager List Comprehension vs Lazy Generator
 # Demonstrates how generators drastically minimize memory consumption
 
 def eager_list():
@@ -381,7 +753,7 @@ print("Testing lazy generator...")
 res2 = sum(lazy_generator())
 print(f"Results match: {res1 == res2}")
 `,
-      recursion: `# Deep Recursive Call Stack
+        recursion: `# Deep Recursive Call Stack
 def fib_tree(n):
     if n <= 1:
         return [n]
@@ -390,24 +762,73 @@ def fib_tree(n):
 res = fib_tree(14)
 print(f"Recursive nodes generated: {len(res)}")
 `
+      }
     };
 
     let currentSession = null;
 
-    // Initialize
+    // Apply Language
+    function setLanguage(lang) {
+      currentLang = lang;
+      localStorage.setItem('memray_lang', lang);
+      document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
+
+      // Update button styling
+      const zhBtn = document.getElementById('lang-btn-zh');
+      const enBtn = document.getElementById('lang-btn-en');
+      if (lang === 'zh') {
+        zhBtn.className = 'px-2.5 py-1 rounded-md text-xs font-semibold bg-orange-500/20 text-orange-300 border border-orange-500/40 shadow-sm';
+        enBtn.className = 'px-2.5 py-1 rounded-md text-xs font-semibold text-slate-400 hover:text-white transition';
+      } else {
+        enBtn.className = 'px-2.5 py-1 rounded-md text-xs font-semibold bg-orange-500/20 text-orange-300 border border-orange-500/40 shadow-sm';
+        zhBtn.className = 'px-2.5 py-1 rounded-md text-xs font-semibold text-slate-400 hover:text-white transition';
+      }
+
+      // Update text in elements with data-i18n
+      const dict = I18N[lang] || I18N.zh;
+      document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (dict[key]) el.innerText = dict[key];
+      });
+
+      // Update attributes with data-i18n-title
+      document.querySelectorAll('[data-i18n-title]').forEach(el => {
+        const key = el.getAttribute('data-i18n-title');
+        if (dict[key]) el.setAttribute('title', dict[key]);
+      });
+
+      // Update guide content
+      document.getElementById('guide-content').innerHTML = dict.guideHtml;
+
+      // Update active preset if currently a preset
+      const currentPreset = document.getElementById('preset-select').value;
+      if (currentPreset !== 'custom') {
+        loadPreset(currentPreset);
+      }
+    }
+
+    // Initialize on page load
     window.addEventListener('DOMContentLoaded', () => {
+      setLanguage(currentLang);
       loadPreset('leak');
       loadSessions();
     });
 
     function loadPreset(key) {
-      if (PRESETS[key]) {
-        document.getElementById('code-editor').value = PRESETS[key];
+      const presetsLang = PRESETS[currentLang] || PRESETS.zh;
+      if (presetsLang[key]) {
+        document.getElementById('code-editor').value = presetsLang[key];
       }
     }
 
     function clearEditor() {
       document.getElementById('code-editor').value = '';
+      document.getElementById('preset-select').value = 'custom';
+    }
+
+    function toggleGuideModal(show) {
+      const modal = document.getElementById('guide-modal');
+      modal.classList.toggle('hidden', !show);
     }
 
     function showToast(text, type = 'success') {
@@ -431,15 +852,17 @@ print(f"Recursive nodes generated: {len(res)}")
     // Run Profile
     async function runProfile() {
       const code = document.getElementById('code-editor').value.trim();
+      const dict = I18N[currentLang] || I18N.zh;
+
       if (!code) {
-        showToast('Please enter some Python code to profile.', 'error');
+        showToast(dict.toastEnterCode, 'error');
         return;
       }
 
       const btn = document.getElementById('btn-run-profile');
       btn.disabled = true;
-      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Profiling Memory...`;
-      document.getElementById('status-indicator').innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span> Profiling...`;
+      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${dict.statusProfiling}`;
+      document.getElementById('status-indicator').innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span> ${dict.statusProfiling}`;
 
       const native = document.getElementById('opt-native').checked;
       const allocators = document.getElementById('opt-allocators').checked;
@@ -461,14 +884,14 @@ print(f"Recursive nodes generated: {len(res)}")
 
         currentSession = data;
         displaySession(data);
-        showToast(`Profile finished! Peak: ${data.peak_memory_human}`);
+        showToast(`${dict.toastProfileDone} ${data.peak_memory_human}`);
         loadSessions();
       } catch (err) {
         showToast(err.message, 'error');
       } finally {
         btn.disabled = false;
-        btn.innerHTML = `<i class="fa-solid fa-play"></i> Profile Memory`;
-        document.getElementById('status-indicator').innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500"></span> Ready`;
+        btn.innerHTML = `<i class="fa-solid fa-play"></i> <span data-i18n="btnProfile">${dict.btnProfile}</span>`;
+        document.getElementById('status-indicator').innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500"></span> ${dict.statusReady}`;
       }
     }
 
@@ -476,10 +899,11 @@ print(f"Recursive nodes generated: {len(res)}")
     async function handleFileUpload(files) {
       if (!files || !files.length) return;
       const file = files[0];
+      const dict = I18N[currentLang] || I18N.zh;
       const formData = new FormData();
       formData.append('file', file);
 
-      showToast(`Uploading and analyzing ${file.name}...`);
+      showToast(`${dict.toastUploading} ${file.name}...`);
       try {
         const res = await fetch('/api/upload', {
           method: 'POST',
@@ -490,7 +914,7 @@ print(f"Recursive nodes generated: {len(res)}")
 
         currentSession = data;
         displaySession(data);
-        showToast(`Loaded ${file.name}! Peak: ${data.peak_memory_human}`);
+        showToast(`${dict.toastLoadedFile} ${data.peak_memory_human}`);
         loadSessions();
       } catch (err) {
         showToast(err.message, 'error');
@@ -524,38 +948,40 @@ print(f"Recursive nodes generated: {len(res)}")
         document.getElementById('empty-table').classList.remove('hidden');
       }
 
+      const dict = I18N[currentLang] || I18N.zh;
+
       // Populate Stats
       const stats = session.stats || {};
       const topAllocs = stats.top_allocations_by_size || [];
       const topList = document.getElementById('top-alloc-size-list');
       if (topAllocs.length) {
         topList.innerHTML = topAllocs.map(a => `
-          <div class="flex items-center justify-between p-2 rounded bg-slate-950 border border-bordercol">
-            <span class="truncate max-w-[280px] text-slate-300" title="${a.location}">${a.location}</span>
-            <span class="text-orange-400 font-bold">${formatBytes(a.size)}</span>
+          <div class="flex items-center justify-between p-2.5 rounded bg-slate-950 border border-bordercol">
+            <span class="truncate max-w-[280px] text-slate-300 text-xs font-mono" title="${a.location}">${a.location}</span>
+            <span class="text-orange-400 font-bold ml-2">${formatBytes(a.size)}</span>
           </div>
         `).join('');
       } else {
-        topList.innerHTML = '<span class="text-slate-500 italic">No allocation sites found</span>';
+        topList.innerHTML = `<span class="text-slate-500 italic">${dict.noData}</span>`;
       }
 
       const dist = stats.allocator_type_distribution || {};
       const distList = document.getElementById('allocator-dist-list');
       if (Object.keys(dist).length) {
         distList.innerHTML = Object.entries(dist).map(([k, v]) => `
-          <div class="flex items-center justify-between p-2 rounded bg-slate-950 border border-bordercol">
-            <span class="text-slate-300">${k}</span>
-            <span class="text-cyan-400 font-bold">${v.toLocaleString()} calls</span>
+          <div class="flex items-center justify-between p-2.5 rounded bg-slate-950 border border-bordercol">
+            <span class="text-slate-300 font-mono font-semibold">${k}</span>
+            <span class="text-cyan-400 font-bold">${v.toLocaleString()} 次调用</span>
           </div>
         `).join('');
       } else {
-        distList.innerHTML = '<span class="text-slate-500 italic">No allocator stats</span>';
+        distList.innerHTML = `<span class="text-slate-500 italic">${dict.noData}</span>`;
       }
 
       document.getElementById('raw-stats-json').innerText = JSON.stringify(stats, null, 2);
 
       // Console
-      document.getElementById('summary-output').innerText = session.summary || 'No summary generated.';
+      document.getElementById('summary-output').innerText = session.summary || dict.noSummary;
       document.getElementById('stdout-output').innerText = session.stdout ? `STDOUT:\n${session.stdout}` : '';
       document.getElementById('stderr-output').innerText = session.stderr ? `STDERR:\n${session.stderr}` : '';
     }
@@ -589,10 +1015,11 @@ print(f"Recursive nodes generated: {len(res)}")
         const list = await res.json();
         document.getElementById('history-badge').innerText = list.length;
         const container = document.getElementById('history-list');
+        const dict = I18N[currentLang] || I18N.zh;
         container.innerHTML = '';
 
         if (!list.length) {
-          container.innerHTML = `<div class="text-xs text-slate-500 text-center py-6">No profiling sessions yet.</div>`;
+          container.innerHTML = `<div class="text-xs text-slate-500 text-center py-6">${dict.noHistory}</div>`;
           return;
         }
 
@@ -624,10 +1051,11 @@ print(f"Recursive nodes generated: {len(res)}")
     }
 
     async function deleteSession(id) {
-      if (!confirm('Delete this profiling run?')) return;
+      const dict = I18N[currentLang] || I18N.zh;
+      if (!confirm(dict.confirmDelete)) return;
       try {
         await fetch(`/api/sessions/${id}`, { method: 'DELETE' });
-        showToast('Run deleted');
+        showToast(dict.toastRunDeleted);
         loadSessions();
       } catch (err) {
         showToast(err.message, 'error');
