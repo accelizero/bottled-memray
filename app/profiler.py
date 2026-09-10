@@ -1,6 +1,6 @@
 import json
 import logging
-import os
+import re
 import shutil
 import subprocess
 import time
@@ -10,35 +10,124 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
-def format_bytes(size_in_bytes: int | float) -> str:
-    """Format bytes to human readable string (B, KB, MB, GB)."""
-    if size_in_bytes is None:
+def format_bytes(bytes_val: int) -> str:
+    if not bytes_val or bytes_val <= 0:
         return "0 B"
-    size = float(size_in_bytes)
-    for unit in ["B", "KB", "MB", "GB", "TB"]:
-        if abs(size) < 1024.0:
-            return f"{size:.2f} {unit}" if unit != "B" else f"{int(size)} B"
-        size /= 1024.0
-    return f"{size:.2f} PB"
+    units = ["B", "KB", "MB", "GB", "TB"]
+    i = 0
+    val = float(bytes_val)
+    while val >= 1024 and i < len(units) - 1:
+        val /= 1024.0
+        i += 1
+    return f"{val:.2f} {units[i]}"
+
+
+ZH_INJECTION_SCRIPT = """
+<script>
+(function() {
+  function applyChineseLocalization() {
+    const isEn = (window.parent && window.parent.currentLang === "en") ||
+                 (window.localStorage && window.localStorage.getItem("memray_lang") === "en");
+    if (isEn) return;
+
+    const textMap = {
+      "Python Allocator: pymalloc": "Python 内存分配器: pymalloc (对象池机制)",
+      "Hide Irrelevant Frames": "隐藏非核心/解释器内部调用帧",
+      "Hide Import System Frames": "隐藏 Python 模块导入系统调用帧",
+      "Flames": "火焰图 (自底向上)",
+      "Icicles": "冰柱图 (自顶向下)",
+      "Reset Zoom": "重置视角/缩放",
+      "Memory Graph": "内存随时间变化曲线",
+      "Stats": "统计汇总",
+      "Help": "帮助说明",
+      "Close": "关闭",
+      "Resident set size over time": "常驻内存 (RSS) 随时间消耗曲线",
+      "Thread ID": "线程 ID",
+      "Size": "内存大小",
+      "Allocator": "分配器",
+      "Allocations": "分配次数",
+      "Location": "代码位置/调用行",
+      "Search": "搜索函数或文件名..."
+    };
+
+    document.querySelectorAll("label, button, a, span, th, h5").forEach(el => {
+      const trimmed = el.innerText ? el.innerText.trim() : "";
+      if (textMap[trimmed]) {
+        el.childNodes.forEach(child => {
+          if (child.nodeType === Node.TEXT_NODE && child.nodeValue.trim() === trimmed) {
+            child.nodeValue = textMap[trimmed];
+          }
+        });
+      }
+    });
+
+    document.querySelectorAll("input[type=\"search\"], #searchTerm").forEach(el => {
+      el.setAttribute("placeholder", "🔍 搜索函数、文件名或代码行...");
+    });
+
+    document.querySelectorAll("[data-toggle=\"tooltip\"], [title]").forEach(el => {
+      const t = el.getAttribute("title") || "";
+      if (t.includes("Hide CPython eval frames")) {
+        el.setAttribute("title", "隐藏 CPython 解释器循环和 Memray 内部调用栈，只展示您的业务代码");
+      } else if (t.includes("Hide frames related to the Python import system")) {
+        el.setAttribute("title", "隐藏 Python 导入模块时的内部堆栈");
+      } else if (t.includes("Enable flame graph mode")) {
+        el.setAttribute("title", "启用经典火焰图模式：根入口在底部，被调用函数在上方");
+      } else if (t.includes("Enable icicle graph mode")) {
+        el.setAttribute("title", "启用冰柱图模式：根入口在顶部，自顶向下展开调用");
+      }
+    });
+
+    const observer = new MutationObserver(mutations => {
+      mutations.forEach(mutation => {
+        mutation.addedNodes.forEach(node => {
+          if (node.nodeType === 1 && (node.classList?.contains("d3-flame-graph-tip") || node.classList?.contains("tooltip"))) {
+            translateTip(node);
+          }
+        });
+        if (mutation.target && mutation.target.classList?.contains("d3-flame-graph-tip")) {
+          translateTip(mutation.target);
+        }
+      });
+    });
+
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+
+    function translateTip(el) {
+      if (!el) return;
+      let html = el.innerHTML;
+      if (html.includes(" total<br>") || html.includes(" allocation")) {
+        html = html.replace(/([0-9.]+\s*[KMGT]?B)\s*total/g, "总计内存占用: <b style=\"color:#fb923c\">$1</b>");
+        html = html.replace(/([0-9,]+)\s*allocations?/g, "累计分配次数: <b style=\"color:#38bdf8\">$1</b> 次");
+        html = html.replace(/Thread ID:/g, "线程编号:");
+        html = html.replace(/File\s+([^,]+),\s*line\s+([0-9]+)\s+in\s+([^<]+)/g, "代码文件: <span style=\"color:#94a3b8\">$1</span><br>第 <b>$2</b> 行函数: <span style=\"color:#4ade80\">$3</span>");
+        el.innerHTML = html;
+      }
+    }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", applyChineseLocalization);
+  } else {
+    applyChineseLocalization();
+  }
+  setTimeout(applyChineseLocalization, 400);
+  setTimeout(applyChineseLocalization, 1200);
+})();
+</script>
+"""
 
 
 class ProfilerManager:
     def __init__(self, data_dir: str):
         self.data_dir = Path(data_dir)
         self.reports_dir = self.data_dir / "reports"
-        self.sessions_dir = self.data_dir / "sessions"
         self.reports_dir.mkdir(parents=True, exist_ok=True)
-        self.sessions_dir.mkdir(parents=True, exist_ok=True)
         self.index_file = self.data_dir / "sessions.json"
-        self._ensure_index()
 
-    def _ensure_index(self):
+    def list_sessions(self) -> list:
         if not self.index_file.exists():
-            with open(self.index_file, "w", encoding="utf-8") as f:
-                json.dump([], f)
-
-    def list_sessions(self) -> list[dict]:
-        self._ensure_index()
+            return []
         try:
             with open(self.index_file, "r", encoding="utf-8") as f:
                 return json.load(f)
@@ -47,10 +136,8 @@ class ProfilerManager:
 
     def save_session_meta(self, meta: dict):
         sessions = self.list_sessions()
-        # Prepend new session
         sessions = [s for s in sessions if s.get("id") != meta.get("id")]
         sessions.insert(0, meta)
-        # Keep latest 100
         sessions = sessions[:100]
         with open(self.index_file, "w", encoding="utf-8") as f:
             json.dump(sessions, f, indent=2, ensure_ascii=False)
@@ -87,7 +174,6 @@ class ProfilerManager:
         with open(script_file, "w", encoding="utf-8") as f:
             f.write(code)
 
-        # 1. Run memray
         cmd = ["memray", "run", "-o", str(bin_file)]
         if native:
             cmd.append("--native")
@@ -125,7 +211,6 @@ class ProfilerManager:
 
         elapsed = time.time() - start_time
 
-        # If bin file exists, generate reports
         report_meta = self._generate_reports(bin_file, flame_file, table_file, stats_file, summary_file)
 
         session_meta = {
@@ -202,7 +287,6 @@ class ProfilerManager:
         if not bin_file.exists() or bin_file.stat().st_size == 0:
             return {}
 
-        # 1. Flamegraph
         try:
             subprocess.run(
                 ["memray", "flamegraph", str(bin_file), "-o", str(flame_file), "--force"],
@@ -210,10 +294,11 @@ class ProfilerManager:
                 check=False,
                 timeout=30,
             )
+            if flame_file.exists():
+                self._inject_chinese_into_html(flame_file)
         except Exception as e:
             logger.warning("Error generating flamegraph: %s", e)
 
-        # 2. Table
         try:
             subprocess.run(
                 ["memray", "table", str(bin_file), "-o", str(table_file), "--force"],
@@ -221,10 +306,11 @@ class ProfilerManager:
                 check=False,
                 timeout=30,
             )
+            if table_file.exists():
+                self._inject_chinese_into_html(table_file)
         except Exception as e:
             logger.warning("Error generating table: %s", e)
 
-        # 3. Stats JSON
         stats_dict = {}
         try:
             res = subprocess.run(
@@ -239,7 +325,6 @@ class ProfilerManager:
         except Exception as e:
             logger.warning("Error generating stats: %s", e)
 
-        # 4. Summary Text
         summary_text = ""
         try:
             res = subprocess.run(
@@ -269,3 +354,14 @@ class ProfilerManager:
             "summary_text": summary_text,
             "stats_dict": stats_dict,
         }
+
+    def _inject_chinese_into_html(self, html_path: Path):
+        try:
+            with open(html_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            if "applyChineseLocalization" not in content and "</body>" in content:
+                content = content.replace("</body>", f"{ZH_INJECTION_SCRIPT}\n</body>")
+                with open(html_path, "w", encoding="utf-8") as f:
+                    f.write(content)
+        except Exception as e:
+            logger.warning("Failed to inject Chinese into %s: %s", html_path, e)

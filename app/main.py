@@ -5,12 +5,12 @@ import tempfile
 from pathlib import Path
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-from .profiler import ProfilerManager
+from .profiler import ProfilerManager, ZH_INJECTION_SCRIPT
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -122,20 +122,29 @@ def delete_session(session_id: str):
     return {"status": "ok"}
 
 
+def _read_and_inject_report(report_file: Path) -> Response:
+    if not report_file.exists():
+        raise HTTPException(status_code=404, detail="Report not found")
+    try:
+        with open(report_file, "r", encoding="utf-8") as f:
+            html = f.read()
+        if "applyChineseLocalization" not in html and "</body>" in html:
+            html = html.replace("</body>", f"{ZH_INJECTION_SCRIPT}\n</body>")
+        return HTMLResponse(content=html)
+    except Exception:
+        return FileResponse(str(report_file), media_type="text/html")
+
+
 @app.get("/reports/{session_id}/flamegraph")
 def get_flamegraph(session_id: str):
     report_file = Path(DATA_DIR) / "reports" / session_id / "flamegraph.html"
-    if not report_file.exists():
-        raise HTTPException(status_code=404, detail="Flamegraph not found or not generated")
-    return FileResponse(str(report_file), media_type="text/html")
+    return _read_and_inject_report(report_file)
 
 
 @app.get("/reports/{session_id}/table")
 def get_table(session_id: str):
     report_file = Path(DATA_DIR) / "reports" / session_id / "table.html"
-    if not report_file.exists():
-        raise HTTPException(status_code=404, detail="Table report not found or not generated")
-    return FileResponse(str(report_file), media_type="text/html")
+    return _read_and_inject_report(report_file)
 
 
 @app.get("/reports/{session_id}/download/{file_type}")

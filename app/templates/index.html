@@ -191,7 +191,8 @@
     <section class="flex-1 flex flex-col h-full bg-darkbg overflow-hidden">
       
       <!-- Metrics Overview Bar (Shown after run) -->
-      <div id="metrics-bar" class="hidden px-6 py-3 bg-slate-900/70 border-b border-bordercol flex flex-wrap items-center justify-between gap-4">
+      <div id="metrics-bar" class="hidden flex-col border-b border-bordercol bg-slate-900/80">
+        <div class="px-6 py-3 flex flex-wrap items-center justify-between gap-4">
         <div class="flex items-center gap-6">
           <div title="代码在整个运行期间瞬时达到的最高内存占用总量">
             <span class="text-[11px] uppercase tracking-wider text-slate-400 font-semibold block flex items-center gap-1">
@@ -242,6 +243,20 @@
             <i class="fa-solid fa-floppy-disk text-cyan-400"></i>
             <span data-i18n="btnDlBin">下载 .bin 采样</span>
           </a>
+        </div>
+        </div>
+        <!-- Automated Chinese Diagnostic Advice Banner -->
+        <div id="smart-advice-banner" class="px-6 py-2.5 bg-gradient-to-r from-amber-500/10 via-slate-900 to-cyan-500/10 border-t border-bordercol/60 flex items-start gap-3 text-xs">
+          <div class="mt-0.5 text-amber-400 text-sm">
+            <i class="fa-solid fa-wand-magic-sparkles"></i>
+          </div>
+          <div class="flex-1">
+            <div class="font-bold text-slate-200 flex items-center gap-2">
+              <span data-i18n="adviceTitle">💡 AI 内存诊断与优化建议</span>
+              <span class="text-[10px] text-slate-500 font-normal" data-i18n="adviceHint">基于本次采样结果自动提炼</span>
+            </div>
+            <div id="smart-advice-text" class="text-slate-300 mt-1 leading-relaxed"></div>
+          </div>
         </div>
       </div>
 
@@ -474,6 +489,8 @@
         drawerHistoryTitle: "历史采样记录",
         modalGuideTitle: "Memray 内存诊断速成指南",
         btnCloseModal: "我知道了",
+        adviceTitle: "💡 AI 内存诊断与优化建议",
+        adviceHint: "根据本次执行生成的分配数据自动提炼的结论",
         noData: "暂无数据",
         noSummary: "暂无摘要输出",
         noHistory: "暂无历史采样记录",
@@ -564,6 +581,8 @@
         drawerHistoryTitle: "Profiling History",
         modalGuideTitle: "Memray Quickstart & Diagnostics Guide",
         btnCloseModal: "Got it",
+        adviceTitle: "💡 AI Memory Insights & Advice",
+        adviceHint: "Automated conclusions based on this profile run",
         noData: "No data",
         noSummary: "No summary available",
         noHistory: "No profiling sessions yet",
@@ -800,6 +819,10 @@ print(f"Recursive nodes generated: {len(res)}")
       // Update guide content
       document.getElementById('guide-content').innerHTML = dict.guideHtml;
 
+      if (currentSession) {
+        generateDiagnosticAdvice(currentSession);
+      }
+
       // Update active preset if currently a preset
       const currentPreset = document.getElementById('preset-select').value;
       if (currentPreset !== 'custom') {
@@ -929,6 +952,8 @@ print(f"Recursive nodes generated: {len(res)}")
       document.getElementById('metric-allocs').innerText = (session.total_allocations || 0).toLocaleString();
       document.getElementById('metric-time').innerText = `${session.elapsed_seconds || 0}s`;
 
+      generateDiagnosticAdvice(session);
+
       document.getElementById('dl-flame').href = `/reports/${session.id}/download/flamegraph`;
       document.getElementById('dl-bin').href = `/reports/${session.id}/download/bin`;
 
@@ -984,6 +1009,44 @@ print(f"Recursive nodes generated: {len(res)}")
       document.getElementById('summary-output').innerText = session.summary || dict.noSummary;
       document.getElementById('stdout-output').innerText = session.stdout ? `STDOUT:\n${session.stdout}` : '';
       document.getElementById('stderr-output').innerText = session.stderr ? `STDERR:\n${session.stderr}` : '';
+    }
+
+    function generateDiagnosticAdvice(session) {
+      const isZh = (currentLang === 'zh');
+      const peak = session.peak_memory_human || '0 B';
+      const allocs = session.total_allocations || 0;
+      const stats = session.stats || {};
+      const topAllocs = stats.top_allocations_by_size || [];
+      const adviceEl = document.getElementById('smart-advice-text');
+      if (!adviceEl) return;
+
+      let topLoc = '代码主干';
+      let topSize = '0 B';
+      if (topAllocs.length > 0) {
+        topLoc = topAllocs[0].location.replace(/^<listcomp>:/, '列表推导式 ').replace(/^<dictcomp>:/, '字典推导式 ');
+        topSize = formatBytes(topAllocs[0].size);
+      }
+
+      if (isZh) {
+        let adviceHtml = `本次程序运行的峰值内存为 <b class="text-orange-400">${peak}</b>，共触发 <b class="text-cyan-400">${allocs.toLocaleString()}</b> 次底层内存分配。`;
+        if (topAllocs.length > 0) {
+          adviceHtml += `<br/>🚨 <b>主要消耗元凶</b>：位于 <code class="text-amber-300 font-mono bg-slate-950 px-1.5 py-0.5 rounded border border-bordercol">${topLoc}</code> 独占了约 <b class="text-orange-400">${topSize}</b> 内存！`;
+          if (topLoc.includes('script.py') || topLoc.includes('bytearray') || topLoc.includes('listcomp')) {
+            adviceHtml += ` <br/>👉 <b>新手优化指南</b>：这行代码是吃内存的核心。若是缓存列表请注意调用 <code>.clear()</code>，若是循环构建大数据集建议改用 <code>(x for x in ...)</code> 生成器以节省 90% 以上内存。`;
+          } else if (topLoc.includes('pandas') || topLoc.includes('merge')) {
+            adviceHtml += ` <br/>👉 <b>新手优化指南</b>：Pandas 在数据合并与分组时会产生中间副本尖峰，建议指定紧凑数据类型（如 <code>category</code> / <code>float32</code>）或使用 <code>chunksize</code> 分块读取。`;
+          }
+        } else {
+          adviceHtml += ` 代码运行整体平稳，未检测到瞬时超大对象分配。`;
+        }
+        adviceEl.innerHTML = adviceHtml;
+      } else {
+        let adviceHtml = `Peak memory was <b class="text-orange-400">${peak}</b> with <b class="text-cyan-400">${allocs.toLocaleString()}</b> allocations.`;
+        if (topAllocs.length > 0) {
+          adviceHtml += `<br/>🚨 <b>Primary Culprit</b>: Location <code class="text-amber-300 font-mono bg-slate-950 px-1 py-0.5 rounded border border-bordercol">${topLoc}</code> directly consumed <b class="text-orange-400">${topSize}</b>.`;
+        }
+        adviceEl.innerHTML = adviceHtml;
+      }
     }
 
     function formatBytes(bytes) {
