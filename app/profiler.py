@@ -69,7 +69,38 @@ ZH_REPLACEMENTS = [
     (r'title:"Location"', r'title:"代码位置/调用行"'),
 
     # Modal titles
+    (r'Memray run stats', r'Memray 执行采样统计汇总'),
+    (r'How to interpret flamegraph reports', r'如何解读内存火焰图报告'),
+    (r'How to interpret table reports', r'如何解读内存分配明细表'),
     (r'Resident set size over time', r'常驻内存 (RSS) 随时间消耗曲线'),
+
+    # Stats Modal Body Labels
+    (r'Command line:', r'执行命令行:'),
+    (r'Start time:', r'开始执行时间:'),
+    (r'End time:', r'结束执行时间:'),
+    (r'Duration:', r'采样持续总耗时:'),
+    (r'Total number of allocations:', r'内存分配调用总次数:'),
+    (r'Total number of frames seen:', r'遍历调用栈帧总数:'),
+    (r'Peak memory usage:', r'峰值内存占用总量:'),
+    (r'Python allocator:', r'Python 内存分配器:'),
+
+    # Help Modal Body Translations (Flamegraph)
+    (r'The flame graph displays a snapshot of memory used across stack frames at the time <b>when the memory usage was at its peak</b>\.',
+     r'火焰图展示了<b>内存使用达到峰值时刻</b>，跨各个调用调用栈帧所消耗内存的瞬时快照。'),
+    (r'The vertical ordering of the stack frames corresponds to the order of function calls, from parent to children\.\s*The horizontal ordering does not represent the passage of time in the application: they simply represent child frames in arbitrary order\.',
+     r'<b>纵向层级</b>对应函数调用顺序（自父函数调用到子函数）。<b>横向宽度</b>不代表时间先后，而代表内存占用比例：横条越宽，说明该代码路径吃掉的内存越多。'),
+    (r'On the flame graph, each bar represents a stack frame and shows the code which triggered the memory allocation\.\s*Hovering over the frame you can also see the overall memory allocated in the given frame and its children and the number of times allocations have occurred\.',
+     r'在火焰图中，每个色块代表一个函数调用栈帧，并标注触发内存申请的具体代码位置。鼠标悬停在色块上可查看该帧及其子调用累计消耗的总内存、自身内存及调用次数。'),
+    (r'The <b>Show/Hide Irrelevant Frames</b> button can be used to reveal and hide frames which contain allocations in code which might not be\s*relevant for the application\.\s*These include frames in the CPython eval loop as well as frames introduced by memray during the analysis\.',
+     r'<b>“隐藏非核心/解释器内部调用帧”</b>开关用于隐藏 CPython 解释器自身的执行循环以及 Memray 工具内部开销，让您专注于自己的业务代码。'),
+    (r'You can find more information in the <a target="_blank"\s*href="https://bloomberg\.github\.io/memray/flamegraph\.html">documentation</a>\.',
+     r'了解更多详情，请参阅 Memray 官方中文与原厂文档。'),
+
+    # Help Modal Body Translations (Table)
+    (r'The table reporter provides a simple tabular representation of memory\s*allocations in the target <b>when the memory usage was at its peak</b>\.',
+     r'内存明细表以表格形式直观展示<b>内存达到峰值时刻</b>目标代码的分配清单，便于按占用大小排序定位行号。'),
+    (r'You can find more information in the <a target="_blank" href="https://bloomberg\.github\.io/memray/table\.html">documentation</a>\.',
+     r'了解更多详情，请参阅 Memray 官方文档。'),
 ]
 
 
