@@ -22,100 +22,98 @@ def format_bytes(bytes_val: int) -> str:
     return f"{val:.2f} {units[i]}"
 
 
-ZH_INJECTION_SCRIPT = """
+ZH_REPLACEMENTS = [
+    # Flamegraph & Table Navbar Brand
+    (r'<span class="navbar-brand mb-0 mr-2 h1">memray</span> flamegraph report',
+     r'<span class="navbar-brand mb-0 mr-2 h1">memray</span> 内存火焰图分析报告'),
+    (r'<span class="navbar-brand mb-0 mr-2 h1">memray</span> table report',
+     r'<span class="navbar-brand mb-0 mr-2 h1">memray</span> 内存分配明细表'),
+
+    # Allocator Badge
+    (r'Python Allocator: pymalloc', r'Python 内存分配器: pymalloc (对象池机制)'),
+
+    # Filters
+    (r'>Hide Irrelevant Frames<', r'>隐藏非核心/解释器内部调用帧<'),
+    (r'>Hide Import System Frames<', r'>隐藏 Python 模块导入系统调用帧<'),
+
+    # Flame / Icicles buttons
+    (r'&nbsp;\s*Flames\s*</label>', r'&nbsp; 火焰图 (自底向上)</label>'),
+    (r'Icicles\s*&nbsp;', r'冰柱图 (自顶向下) &nbsp;'),
+
+    # Zoom & Buttons
+    (r'>Reset Zoom<', r'>重置视角/缩放<'),
+    (r'>Memory Graph<', r'>内存变化曲线<'),
+    (r'>Stats<', r'>统计汇总<'),
+    (r'>Help<', r'>帮助说明<'),
+    (r'>Close<', r'>关闭<'),
+    (r'>Reset<', r'>重置<'),
+
+    # Tooltips
+    (r'title="Hide CPython eval frames and Memray-related frames"',
+     r'title="隐藏 CPython 解释器循环和 Memray 内部调用栈，只展示您的业务代码"'),
+    (r'title="Hide frames related to the Python import system"',
+     r'title="隐藏 Python 导入模块时的内部堆栈"'),
+    (r'title="Enable flame graph mode: functions above their callers with the root at the bottom"',
+     r'title="启用经典火焰图模式：根入口在底部，被调用函数在上方"'),
+    (r'title="Enable icicle graph mode: functions below their callers with the root at the top"',
+     r'title="启用冰柱图模式：根入口在顶部，自顶向下展开调用"'),
+
+    # Search placeholder
+    (r'placeholder="Search"', r'placeholder="🔍 搜索函数、文件名或代码行..."'),
+
+    # Table columns
+    (r'title:"Thread ID"', r'title:"线程 ID"'),
+    (r'title:"Size"', r'title:"内存大小"'),
+    (r'title:"Allocator"', r'title:"分配器"'),
+    (r'title:"Allocations"', r'title:"分配次数"'),
+    (r'title:"Location"', r'title:"代码位置/调用行"'),
+
+    # Modal titles
+    (r'Resident set size over time', r'常驻内存 (RSS) 随时间消耗曲线'),
+]
+
+
+ZH_TOOLTIP_INJECTION = """
 <script>
 (function() {
-  function applyChineseLocalization() {
-    const isEn = (window.parent && window.parent.currentLang === "en") ||
-                 (window.localStorage && window.localStorage.getItem("memray_lang") === "en");
-    if (isEn) return;
-
-    const textMap = {
-      "Python Allocator: pymalloc": "Python 内存分配器: pymalloc (对象池机制)",
-      "Hide Irrelevant Frames": "隐藏非核心/解释器内部调用帧",
-      "Hide Import System Frames": "隐藏 Python 模块导入系统调用帧",
-      "Flames": "火焰图 (自底向上)",
-      "Icicles": "冰柱图 (自顶向下)",
-      "Reset Zoom": "重置视角/缩放",
-      "Memory Graph": "内存随时间变化曲线",
-      "Stats": "统计汇总",
-      "Help": "帮助说明",
-      "Close": "关闭",
-      "Resident set size over time": "常驻内存 (RSS) 随时间消耗曲线",
-      "Thread ID": "线程 ID",
-      "Size": "内存大小",
-      "Allocator": "分配器",
-      "Allocations": "分配次数",
-      "Location": "代码位置/调用行",
-      "Search": "搜索函数或文件名..."
-    };
-
-    document.querySelectorAll("label, button, a, span, th, h5").forEach(el => {
-      const trimmed = el.innerText ? el.innerText.trim() : "";
-      if (textMap[trimmed]) {
-        el.childNodes.forEach(child => {
-          if (child.nodeType === Node.TEXT_NODE && child.nodeValue.trim() === trimmed) {
-            child.nodeValue = textMap[trimmed];
-          }
-        });
-      }
-    });
-
-    document.querySelectorAll("input[type=\"search\"], #searchTerm").forEach(el => {
-      el.setAttribute("placeholder", "🔍 搜索函数、文件名或代码行...");
-    });
-
-    document.querySelectorAll("[data-toggle=\"tooltip\"], [title]").forEach(el => {
-      const t = el.getAttribute("title") || "";
-      if (t.includes("Hide CPython eval frames")) {
-        el.setAttribute("title", "隐藏 CPython 解释器循环和 Memray 内部调用栈，只展示您的业务代码");
-      } else if (t.includes("Hide frames related to the Python import system")) {
-        el.setAttribute("title", "隐藏 Python 导入模块时的内部堆栈");
-      } else if (t.includes("Enable flame graph mode")) {
-        el.setAttribute("title", "启用经典火焰图模式：根入口在底部，被调用函数在上方");
-      } else if (t.includes("Enable icicle graph mode")) {
-        el.setAttribute("title", "启用冰柱图模式：根入口在顶部，自顶向下展开调用");
-      }
-    });
-
-    const observer = new MutationObserver(mutations => {
-      mutations.forEach(mutation => {
-        mutation.addedNodes.forEach(node => {
-          if (node.nodeType === 1 && (node.classList?.contains("d3-flame-graph-tip") || node.classList?.contains("tooltip"))) {
-            translateTip(node);
-          }
-        });
-        if (mutation.target && mutation.target.classList?.contains("d3-flame-graph-tip")) {
-          translateTip(mutation.target);
+  // Mutation observer for dynamic flamegraph tooltip
+  const observer = new MutationObserver(mutations => {
+    mutations.forEach(mutation => {
+      mutation.addedNodes.forEach(node => {
+        if (node.nodeType === 1 && (node.classList?.contains('d3-flame-graph-tip') || node.classList?.contains('tooltip'))) {
+          translateTip(node);
         }
       });
-    });
-
-    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
-
-    function translateTip(el) {
-      if (!el) return;
-      let html = el.innerHTML;
-      if (html.includes(" total<br>") || html.includes(" allocation")) {
-        html = html.replace(/([0-9.]+\s*[KMGT]?B)\s*total/g, "总计内存占用: <b style=\"color:#fb923c\">$1</b>");
-        html = html.replace(/([0-9,]+)\s*allocations?/g, "累计分配次数: <b style=\"color:#38bdf8\">$1</b> 次");
-        html = html.replace(/Thread ID:/g, "线程编号:");
-        html = html.replace(/File\s+([^,]+),\s*line\s+([0-9]+)\s+in\s+([^<]+)/g, "代码文件: <span style=\"color:#94a3b8\">$1</span><br>第 <b>$2</b> 行函数: <span style=\"color:#4ade80\">$3</span>");
-        el.innerHTML = html;
+      if (mutation.target && mutation.target.classList?.contains('d3-flame-graph-tip')) {
+        translateTip(mutation.target);
       }
+    });
+  });
+
+  observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+
+  function translateTip(el) {
+    if (!el) return;
+    let html = el.innerHTML;
+    if (html.includes(' total<br>') || html.includes(' allocation')) {
+      html = html.replace(/([0-9.]+\s*[KMGT]?B)\s*total/g, '总计内存占用: <b style="color:#fb923c">$1</b>');
+      html = html.replace(/([0-9,]+)\s*allocations?/g, '累计分配次数: <b style="color:#38bdf8">$1</b> 次');
+      html = html.replace(/Thread ID:/g, '线程编号:');
+      html = html.replace(/File\s+([^,]+),\s*line\s+([0-9]+)\s+in\s+([^<]+)/g, '代码文件: <span style="color:#94a3b8">$1</span><br>第 <b>$2</b> 行函数: <span style="color:#4ade80">$3</span>');
+      el.innerHTML = html;
     }
   }
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", applyChineseLocalization);
-  } else {
-    applyChineseLocalization();
-  }
-  setTimeout(applyChineseLocalization, 400);
-  setTimeout(applyChineseLocalization, 1200);
 })();
 </script>
 """
+
+
+def apply_chinese_to_html_content(content: str) -> str:
+    for pattern, repl in ZH_REPLACEMENTS:
+        content = re.sub(pattern, repl, content)
+    if "translateTip" not in content and "</body>" in content:
+        content = content.replace("</body>", f"{ZH_TOOLTIP_INJECTION}\n</body>")
+    return content
 
 
 class ProfilerManager:
@@ -287,6 +285,7 @@ class ProfilerManager:
         if not bin_file.exists() or bin_file.stat().st_size == 0:
             return {}
 
+        # 1. Flamegraph
         try:
             subprocess.run(
                 ["memray", "flamegraph", str(bin_file), "-o", str(flame_file), "--force"],
@@ -295,10 +294,11 @@ class ProfilerManager:
                 timeout=30,
             )
             if flame_file.exists():
-                self._inject_chinese_into_html(flame_file)
+                self._localize_file(flame_file)
         except Exception as e:
             logger.warning("Error generating flamegraph: %s", e)
 
+        # 2. Table
         try:
             subprocess.run(
                 ["memray", "table", str(bin_file), "-o", str(table_file), "--force"],
@@ -307,10 +307,11 @@ class ProfilerManager:
                 timeout=30,
             )
             if table_file.exists():
-                self._inject_chinese_into_html(table_file)
+                self._localize_file(table_file)
         except Exception as e:
             logger.warning("Error generating table: %s", e)
 
+        # 3. Stats JSON
         stats_dict = {}
         try:
             res = subprocess.run(
@@ -325,6 +326,7 @@ class ProfilerManager:
         except Exception as e:
             logger.warning("Error generating stats: %s", e)
 
+        # 4. Summary Text
         summary_text = ""
         try:
             res = subprocess.run(
@@ -355,13 +357,12 @@ class ProfilerManager:
             "stats_dict": stats_dict,
         }
 
-    def _inject_chinese_into_html(self, html_path: Path):
+    def _localize_file(self, file_path: Path):
         try:
-            with open(html_path, "r", encoding="utf-8") as f:
+            with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read()
-            if "applyChineseLocalization" not in content and "</body>" in content:
-                content = content.replace("</body>", f"{ZH_INJECTION_SCRIPT}\n</body>")
-                with open(html_path, "w", encoding="utf-8") as f:
-                    f.write(content)
+            content = apply_chinese_to_html_content(content)
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write(content)
         except Exception as e:
-            logger.warning("Failed to inject Chinese into %s: %s", html_path, e)
+            logger.warning("Failed to localize file %s: %s", file_path, e)

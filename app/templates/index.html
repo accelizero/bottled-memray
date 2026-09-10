@@ -248,12 +248,12 @@
         <!-- Automated Chinese Diagnostic Advice Banner -->
         <div id="smart-advice-banner" class="px-6 py-2.5 bg-gradient-to-r from-amber-500/10 via-slate-900 to-cyan-500/10 border-t border-bordercol/60 flex items-start gap-3 text-xs">
           <div class="mt-0.5 text-amber-400 text-sm">
-            <i class="fa-solid fa-wand-magic-sparkles"></i>
+            <i class="fa-solid fa-chart-line text-cyan-400"></i>
           </div>
           <div class="flex-1">
             <div class="font-bold text-slate-200 flex items-center gap-2">
-              <span data-i18n="adviceTitle">💡 AI 内存诊断与优化建议</span>
-              <span class="text-[10px] text-slate-500 font-normal" data-i18n="adviceHint">基于本次采样结果自动提炼</span>
+              <span data-i18n="adviceTitle">📊 内存采样指标深度剖析报告</span>
+              <span class="text-[10px] text-slate-500 font-normal" data-i18n="adviceHint">多维度指标：水位、集中度与底层系统分配器拓扑</span>
             </div>
             <div id="smart-advice-text" class="text-slate-300 mt-1 leading-relaxed"></div>
           </div>
@@ -489,8 +489,8 @@
         drawerHistoryTitle: "历史采样记录",
         modalGuideTitle: "Memray 内存诊断速成指南",
         btnCloseModal: "我知道了",
-        adviceTitle: "💡 AI 内存诊断与优化建议",
-        adviceHint: "根据本次执行生成的分配数据自动提炼的结论",
+        adviceTitle: "📊 内存采样指标深度剖析报告",
+        adviceHint: "多维度指标：水位、集中度与底层系统分配器拓扑",
         noData: "暂无数据",
         noSummary: "暂无摘要输出",
         noHistory: "暂无历史采样记录",
@@ -581,8 +581,8 @@
         drawerHistoryTitle: "Profiling History",
         modalGuideTitle: "Memray Quickstart & Diagnostics Guide",
         btnCloseModal: "Got it",
-        adviceTitle: "💡 AI Memory Insights & Advice",
-        adviceHint: "Automated conclusions based on this profile run",
+        adviceTitle: "📊 In-Depth Memory Profile Diagnostics",
+        adviceHint: "Multi-dimensional metrics: watermark, concentration & allocators",
         noData: "No data",
         noSummary: "No summary available",
         noHistory: "No profiling sessions yet",
@@ -1014,38 +1014,66 @@ print(f"Recursive nodes generated: {len(res)}")
     function generateDiagnosticAdvice(session) {
       const isZh = (currentLang === 'zh');
       const peak = session.peak_memory_human || '0 B';
+      const peakBytes = session.peak_memory_bytes || 0;
       const allocs = session.total_allocations || 0;
       const stats = session.stats || {};
       const topAllocs = stats.top_allocations_by_size || [];
+      const topModules = stats.top_modules_by_allocation_size || [];
+      const dist = stats.allocator_type_distribution || {};
+      const histogram = stats.allocation_size_histogram || [];
       const adviceEl = document.getElementById('smart-advice-text');
       if (!adviceEl) return;
 
       let topLoc = '代码主干';
       let topSize = '0 B';
+      let topSizeBytes = 0;
       if (topAllocs.length > 0) {
         topLoc = topAllocs[0].location.replace(/^<listcomp>:/, '列表推导式 ').replace(/^<dictcomp>:/, '字典推导式 ');
         topSize = formatBytes(topAllocs[0].size);
+        topSizeBytes = topAllocs[0].size;
       }
 
+      // Calculate percentage of top allocation vs total
+      const totalBytes = stats.total_bytes_allocated || peakBytes || 1;
+      const topPercent = Math.min(100, Math.round((topSizeBytes / totalBytes) * 100));
+
+      // Check allocators: CALLOC, MALLOC, MMAP, REALLOC
+      let allocDetails = [];
+      for (const [k, v] of Object.entries(dist)) {
+        allocDetails.push(`${k}: ${v}次`);
+      }
+      const allocSummary = allocDetails.join(' | ') || '无分配记录';
+
+      // Check large blocks count (> 256KB)
+      let largeBlocksCount = 0;
+      histogram.forEach(h => {
+        if (h.min_bytes >= 65535) {
+          largeBlocksCount += (h.count || 0);
+        }
+      });
+
       if (isZh) {
-        let adviceHtml = `本次程序运行的峰值内存为 <b class="text-orange-400">${peak}</b>，共触发 <b class="text-cyan-400">${allocs.toLocaleString()}</b> 次底层内存分配。`;
+        let rows = [];
+        // Dimension 1: Peak & Total Volume
+        rows.push(`<div>• <b>总体内存水位</b>：进程生命周期峰值达到 <b class="text-orange-400 font-mono">${peak}</b>，累计申请总字节量 <b class="text-amber-300 font-mono">${formatBytes(totalBytes)}</b>，累计发生 <b class="text-cyan-400 font-mono">${allocs.toLocaleString()}</b> 次内存系统调用。</div>`);
+
+        // Dimension 2: Primary Culprit & Concentration
         if (topAllocs.length > 0) {
-          adviceHtml += `<br/>🚨 <b>主要消耗元凶</b>：位于 <code class="text-amber-300 font-mono bg-slate-950 px-1.5 py-0.5 rounded border border-bordercol">${topLoc}</code> 独占了约 <b class="text-orange-400">${topSize}</b> 内存！`;
-          if (topLoc.includes('script.py') || topLoc.includes('bytearray') || topLoc.includes('listcomp')) {
-            adviceHtml += ` <br/>👉 <b>新手优化指南</b>：这行代码是吃内存的核心。若是缓存列表请注意调用 <code>.clear()</code>，若是循环构建大数据集建议改用 <code>(x for x in ...)</code> 生成器以节省 90% 以上内存。`;
-          } else if (topLoc.includes('pandas') || topLoc.includes('merge')) {
-            adviceHtml += ` <br/>👉 <b>新手优化指南</b>：Pandas 在数据合并与分组时会产生中间副本尖峰，建议指定紧凑数据类型（如 <code>category</code> / <code>float32</code>）或使用 <code>chunksize</code> 分块读取。`;
-          }
-        } else {
-          adviceHtml += ` 代码运行整体平稳，未检测到瞬时超大对象分配。`;
+          rows.push(`<div>• <b>代码分配集中度分析</b>：首要内存开销位于 <code class="text-amber-300 font-mono bg-slate-950 px-1.5 py-0.5 rounded border border-bordercol text-[11px]">${topLoc}</code>，该单点代码独占 <b class="text-orange-400 font-mono">${topSize}</b>（占总分配量的 <b class="text-rose-400 font-mono">${topPercent}%</b>）。${topPercent > 70 ? '分配高度集中于单一语句，属于典型的单点大内存堆积。' : '内存分散在多处函数调用中。'}</div>`);
         }
-        adviceEl.innerHTML = adviceHtml;
+
+        // Dimension 3: Allocator Pattern
+        rows.push(`<div>• <b>底层分配器调用拓扑</b>：[${allocSummary}]。${dist.CALLOC ? `初始化清零内存 (CALLOC) 占用了 ${dist.CALLOC} 次调用，多见于大数组或集合初始化。` : ''} ${largeBlocksCount > 0 ? `检测到 <b class="text-rose-400">${largeBlocksCount}</b> 次超大内存块申请（>=64KB），直接触发堆外或系统级重分配。` : '均为小对象平缓分配。'}</div>`);
+
+        adviceEl.innerHTML = `<div class="space-y-1.5">${rows.join('')}</div>`;
       } else {
-        let adviceHtml = `Peak memory was <b class="text-orange-400">${peak}</b> with <b class="text-cyan-400">${allocs.toLocaleString()}</b> allocations.`;
+        let rows = [];
+        rows.push(`<div>• <b>Memory Watermark</b>: Peak reached <b class="text-orange-400 font-mono">${peak}</b> across <b class="text-cyan-400 font-mono">${allocs.toLocaleString()}</b> allocations (Total allocated: ${formatBytes(totalBytes)}).</div>`);
         if (topAllocs.length > 0) {
-          adviceHtml += `<br/>🚨 <b>Primary Culprit</b>: Location <code class="text-amber-300 font-mono bg-slate-950 px-1 py-0.5 rounded border border-bordercol">${topLoc}</code> directly consumed <b class="text-orange-400">${topSize}</b>.`;
+          rows.push(`<div>• <b>Concentration Analysis</b>: Primary footprint at <code class="text-amber-300 font-mono bg-slate-950 px-1.5 py-0.5 rounded border border-bordercol text-[11px]">${topLoc}</code> allocating <b class="text-orange-400 font-mono">${topSize}</b> (${topPercent}% of total volume).</div>`);
         }
-        adviceEl.innerHTML = adviceHtml;
+        rows.push(`<div>• <b>Allocator Pattern</b>: [${allocSummary}]. Large block allocations (>=64KB): ${largeBlocksCount}.</div>`);
+        adviceEl.innerHTML = `<div class="space-y-1.5">${rows.join('')}</div>`;
       }
     }
 

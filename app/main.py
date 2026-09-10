@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-from .profiler import ProfilerManager, ZH_INJECTION_SCRIPT
+from .profiler import ProfilerManager, apply_chinese_to_html_content
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -128,8 +128,7 @@ def _read_and_inject_report(report_file: Path) -> Response:
     try:
         with open(report_file, "r", encoding="utf-8") as f:
             html = f.read()
-        if "applyChineseLocalization" not in html and "</body>" in html:
-            html = html.replace("</body>", f"{ZH_INJECTION_SCRIPT}\n</body>")
+        html = apply_chinese_to_html_content(html)
         return HTMLResponse(content=html)
     except Exception:
         return FileResponse(str(report_file), media_type="text/html")
