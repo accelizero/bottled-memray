@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-950">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Memray Web Studio - Python Memory Profiler</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            darkbg: '#090d16',
+            cardbg: '#0f172a',
+            bordercol: '#1e293b',
+            accent: '#06b6d4', // Cyan
+            flame: '#f97316',  // Orange
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    /* Custom scrollbars */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0b0f19; }
+    ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #334155; }
+    .code-font { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+  </style>
+</head>
+<body class="h-full bg-darkbg text-slate-200 flex flex-col font-sans overflow-hidden">
+
+  <!-- Navigation Header -->
+  <header class="bg-cardbg border-b border-bordercol px-6 py-3 flex items-center justify-between flex-shrink-0 z-20">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-500 flex items-center justify-center text-darkbg shadow-lg shadow-orange-500/20 text-lg">
+        <i class="fa-solid fa-fire"></i>
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-base font-bold text-white tracking-wide">Memray Web Studio</h1>
+          <span class="text-[10px] px-2 py-0.5 rounded bg-orange-500/10 text-orange-400 border border-orange-500/20 font-mono">v1.20</span>
+          <span class="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-bordercol font-mono">Bloomberg OSS</span>
+        </div>
+        <p class="text-xs text-slate-400">Interactive memory profiling, flame graphs & allocation diagnostics for Python</p>
+      </div>
+    </div>
+
+    <!-- Right Controls -->
+    <div class="flex items-center gap-3">
+      <button
+        onclick="toggleHistoryDrawer()"
+        class="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-xs font-medium text-slate-300 border border-bordercol flex items-center gap-2 transition"
+      >
+        <i class="fa-solid fa-clock-rotate-left text-slate-400"></i>
+        <span>History</span>
+        <span id="history-badge" class="px-1.5 py-0.2 rounded-full bg-slate-800 text-[10px] text-teal-400">0</span>
+      </button>
+
+      <a
+        href="https://github.com/bloomberg/memray"
+        target="_blank"
+        class="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-xs text-slate-400 hover:text-white border border-bordercol flex items-center gap-1.5 transition"
+      >
+        <i class="fa-brands fa-github"></i>
+        <span>Docs</span>
+      </a>
+    </div>
+  </header>
+
+  <!-- Main Split Content -->
+  <main class="flex-1 flex flex-col lg:flex-row overflow-hidden">
+
+    <!-- Left Panel: Code Editor & Controls (40% width) -->
+    <section class="w-full lg:w-[42%] bg-slate-950 border-r border-bordercol flex flex-col h-full flex-shrink-0 z-10">
+      
+      <!-- Editor Toolbar -->
+      <div class="px-4 py-2.5 bg-slate-900/90 border-b border-bordercol flex items-center justify-between text-xs">
+        <div class="flex items-center gap-2">
+          <span class="font-semibold text-slate-300 flex items-center gap-1.5">
+            <i class="fa-brands fa-python text-amber-400"></i> Python Code
+          </span>
+          <select
+            id="preset-select"
+            onchange="loadPreset(this.value)"
+            class="bg-slate-950 border border-bordercol rounded px-2.5 py-1 text-xs text-slate-300 focus:outline-none focus:border-cyan-500 transition"
+          >
+            <option value="leak">Preset: Memory Leak (Growing List)</option>
+            <option value="pandas">Preset: Pandas GroupBy & Merge</option>
+            <option value="generator">Preset: List vs Generator (Lazy)</option>
+            <option value="recursion">Preset: Deep Call Stack</option>
+            <option value="custom">Custom Code</option>
+          </select>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <label
+            for="file-upload-input"
+            class="cursor-pointer px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-bordercol transition flex items-center gap-1.5"
+            title="Upload .py script or .bin Memray capture file"
+          >
+            <i class="fa-solid fa-file-arrow-up text-cyan-400"></i>
+            <span>Upload</span>
+          </label>
+          <input type="file" id="file-upload-input" class="hidden" accept=".py,.bin" onchange="handleFileUpload(this.files)" />
+        </div>
+      </div>
+
+      <!-- Editor Area -->
+      <div class="flex-1 relative bg-[#0d1117] flex flex-col overflow-hidden">
+        <textarea
+          id="code-editor"
+          spellcheck="false"
+          class="code-font flex-1 p-4 bg-transparent text-emerald-300 text-xs leading-relaxed focus:outline-none resize-none overflow-y-auto border-none"
+          placeholder="# Write Python code here to profile..."
+        ></textarea>
+      </div>
+
+      <!-- Profiling Options & Run Bar -->
+      <div class="p-4 bg-slate-900 border-t border-bordercol space-y-3">
+        <!-- Switches -->
+        <div class="flex flex-wrap items-center gap-4 text-xs text-slate-400">
+          <label class="flex items-center gap-1.5 cursor-pointer hover:text-slate-200">
+            <input type="checkbox" id="opt-native" class="rounded bg-slate-950 border-bordercol text-cyan-500 focus:ring-0" />
+            <span>Trace C/C++ Native (<code class="text-cyan-400">--native</code>)</span>
+          </label>
+          <label class="flex items-center gap-1.5 cursor-pointer hover:text-slate-200">
+            <input type="checkbox" id="opt-allocators" class="rounded bg-slate-950 border-bordercol text-cyan-500 focus:ring-0" />
+            <span>Trace PyMalloc (<code class="text-cyan-400">--trace-python-allocators</code>)</span>
+          </label>
+        </div>
+
+        <!-- Action Button -->
+        <div class="flex items-center gap-3">
+          <button
+            id="btn-run-profile"
+            onclick="runProfile()"
+            class="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-darkbg font-bold shadow-lg shadow-orange-500/20 flex items-center justify-center gap-2 text-sm transition"
+          >
+            <i class="fa-solid fa-play"></i>
+            <span>Profile Memory</span>
+          </button>
+          <button
+            onclick="clearEditor()"
+            class="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white border border-bordercol text-xs transition"
+            title="Clear editor"
+          >
+            <i class="fa-solid fa-trash-can"></i>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right Panel: Visualization & Diagnostics (58% width) -->
+    <section class="flex-1 flex flex-col h-full bg-darkbg overflow-hidden">
+      
+      <!-- Metrics Overview Bar (Shown after run) -->
+      <div id="metrics-bar" class="hidden px-6 py-3 bg-slate-900/70 border-b border-bordercol flex flex-wrap items-center justify-between gap-4">
+        <div class="flex items-center gap-6">
+          <div>
+            <span class="text-[11px] uppercase tracking-wider text-slate-500 font-semibold block">Peak Memory</span>
+            <span id="metric-peak" class="text-lg font-bold text-orange-400 font-mono">0 B</span>
+          </div>
+          <div class="h-7 w-px bg-bordercol"></div>
+          <div>
+            <span class="text-[11px] uppercase tracking-wider text-slate-500 font-semibold block">Allocations</span>
+            <span id="metric-allocs" class="text-lg font-bold text-cyan-400 font-mono">0</span>
+          </div>
+          <div class="h-7 w-px bg-bordercol"></div>
+          <div>
+            <span class="text-[11px] uppercase tracking-wider text-slate-500 font-semibold block">Execution Time</span>
+            <span id="metric-time" class="text-lg font-bold text-emerald-400 font-mono">0s</span>
+          </div>
+        </div>
+
+        <!-- Downloads dropdown -->
+        <div class="flex items-center gap-2">
+          <a
+            id="dl-flame"
+            href="#"
+            target="_blank"
+            class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 border border-bordercol flex items-center gap-1.5 transition"
+            title="Download standalone Flamegraph HTML"
+          >
+            <i class="fa-solid fa-download text-orange-400"></i>
+            <span>HTML Flame</span>
+          </a>
+          <a
+            id="dl-bin"
+            href="#"
+            target="_blank"
+            class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 border border-bordercol flex items-center gap-1.5 transition"
+            title="Download raw .bin capture"
+          >
+            <i class="fa-solid fa-floppy-disk text-cyan-400"></i>
+            <span>Raw .bin</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Report View Navigation Tabs -->
+      <div class="px-6 bg-cardbg border-b border-bordercol flex items-center justify-between flex-shrink-0">
+        <div class="flex space-x-1" id="report-nav-tabs">
+          <button onclick="switchTab('flame')" id="tab-btn-flame" class="py-2.5 px-4 text-xs font-semibold border-b-2 border-orange-500 text-orange-400 flex items-center gap-2">
+            <i class="fa-solid fa-fire"></i> Flame Graph
+          </button>
+          <button onclick="switchTab('table')" id="tab-btn-table" class="py-2.5 px-4 text-xs font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2">
+            <i class="fa-solid fa-table"></i> Allocation Table
+          </button>
+          <button onclick="switchTab('stats')" id="tab-btn-stats" class="py-2.5 px-4 text-xs font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2">
+            <i class="fa-solid fa-chart-pie"></i> Stats & Top Sites
+          </button>
+          <button onclick="switchTab('console')" id="tab-btn-console" class="py-2.5 px-4 text-xs font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2">
+            <i class="fa-solid fa-terminal"></i> Terminal & Summary
+          </button>
+        </div>
+        <div id="status-indicator" class="text-xs text-slate-500 flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-emerald-500"></span> Ready
+        </div>
+      </div>
+
+      <!-- View Containers -->
+      <div class="flex-1 relative overflow-hidden bg-slate-950">
+        
+        <!-- Tab 1: Flamegraph iframe -->
+        <div id="pane-flame" class="absolute inset-0 flex flex-col">
+          <iframe id="iframe-flame" class="w-full h-full border-none bg-white" src="about:blank"></iframe>
+          <!-- Empty State -->
+          <div id="empty-flame" class="absolute inset-0 bg-slate-950 flex flex-col items-center justify-center p-8 text-center">
+            <div class="w-16 h-16 rounded-2xl bg-orange-500/10 text-orange-400 border border-orange-500/20 flex items-center justify-center text-3xl mb-4">
+              <i class="fa-solid fa-fire"></i>
+            </div>
+            <h3 class="text-lg font-bold text-white mb-1">No Flame Graph Yet</h3>
+            <p class="text-xs text-slate-400 max-w-sm">Click "Profile Memory" on the left or upload a script / .bin file to generate an interactive memory flame graph.</p>
+          </div>
+        </div>
+
+        <!-- Tab 2: Table iframe -->
+        <div id="pane-table" class="absolute inset-0 hidden flex flex-col">
+          <iframe id="iframe-table" class="w-full h-full border-none bg-white" src="about:blank"></iframe>
+          <div id="empty-table" class="absolute inset-0 bg-slate-950 flex flex-col items-center justify-center p-8 text-center">
+            <p class="text-xs text-slate-500">Run a profile to view the memory allocation table.</p>
+          </div>
+        </div>
+
+        <!-- Tab 3: Stats JSON & Visuals -->
+        <div id="pane-stats" class="absolute inset-0 hidden overflow-y-auto p-6 space-y-6">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Top Allocations by Size -->
+            <div class="bg-cardbg border border-bordercol rounded-xl p-5 shadow-lg">
+              <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-2">
+                <i class="fa-solid fa-arrow-up-wide-short text-orange-400"></i> Top Allocations by Size
+              </h4>
+              <div id="top-alloc-size-list" class="space-y-2 text-xs font-mono">
+                <span class="text-slate-500 italic">No data</span>
+              </div>
+            </div>
+
+            <!-- Allocator Distribution -->
+            <div class="bg-cardbg border border-bordercol rounded-xl p-5 shadow-lg">
+              <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-2">
+                <i class="fa-solid fa-layer-group text-cyan-400"></i> Allocator Types
+              </h4>
+              <div id="allocator-dist-list" class="space-y-2 text-xs font-mono">
+                <span class="text-slate-500 italic">No data</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Raw Stats JSON -->
+          <div class="bg-cardbg border border-bordercol rounded-xl p-5 shadow-lg">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-2">
+              <i class="fa-solid fa-code text-emerald-400"></i> Detailed Stats Metadata
+            </h4>
+            <pre id="raw-stats-json" class="p-4 rounded bg-slate-950 text-emerald-300 text-xs code-font overflow-x-auto max-h-80"></pre>
+          </div>
+        </div>
+
+        <!-- Tab 4: Terminal & Summary -->
+        <div id="pane-console" class="absolute inset-0 hidden overflow-y-auto p-6 space-y-4">
+          <div class="bg-slate-900 border border-bordercol rounded-xl p-4">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-2">
+              <i class="fa-solid fa-table-list text-cyan-400"></i> Memray Summary Table
+            </h4>
+            <pre id="summary-output" class="text-xs font-mono text-slate-300 whitespace-pre overflow-x-auto">No summary available</pre>
+          </div>
+
+          <div class="bg-slate-900 border border-bordercol rounded-xl p-4">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-2">
+              <i class="fa-solid fa-terminal text-slate-400"></i> Standard Output & Logs
+            </h4>
+            <pre id="stdout-output" class="text-xs font-mono text-emerald-400 whitespace-pre overflow-x-auto"></pre>
+            <pre id="stderr-output" class="text-xs font-mono text-rose-400 whitespace-pre overflow-x-auto mt-2"></pre>
+          </div>
+        </div>
+
+      </div>
+    </section>
+  </main>
+
+  <!-- History Drawer (Overlay) -->
+  <div id="history-drawer" class="fixed inset-y-0 right-0 w-80 bg-cardbg border-l border-bordercol shadow-2xl z-30 transform translate-x-full transition-transform duration-200 flex flex-col">
+    <div class="p-4 border-b border-bordercol flex items-center justify-between">
+      <h3 class="font-bold text-sm text-white flex items-center gap-2">
+        <i class="fa-solid fa-clock-rotate-left text-teal-400"></i> Profiling History
+      </h3>
+      <button onclick="toggleHistoryDrawer()" class="text-slate-400 hover:text-white text-sm">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <div class="flex-1 overflow-y-auto p-4 space-y-2.5" id="history-list">
+      <!-- Injected dynamically -->
+    </div>
+  </div>
+
+  <!-- Toast Message -->
+  <div id="toast" class="fixed bottom-6 right-6 px-4 py-2.5 rounded-xl bg-slate-900 border border-bordercol text-xs text-white shadow-2xl z-50 transform translate-y-20 opacity-0 transition-all duration-300 flex items-center gap-2">
+    <i id="toast-icon" class="fa-solid fa-circle-check text-emerald-400"></i>
+    <span id="toast-text">Success</span>
+  </div>
+
+  <script>
+    // Presets definitions
+    const PRESETS = {
+      leak: `# Memory Leak Demo
+# Continuously allocates blocks into a list without freeing
+def simulate_leak():
+    leaked_data = []
+    for step in range(30):
+        # Allocate 1MB chunk per iteration
+        chunk = bytearray(1024 * 1024)
+        leaked_data.append(chunk)
+    return len(leaked_data)
+
+simulate_leak()
+print("Leak simulation finished. Total ~30MB allocated.")
+`,
+      pandas: `# Pandas DataFrame Operations
+import pandas as pd
+import numpy as np
+
+# Create large synthetic dataframe
+df1 = pd.DataFrame({
+    'key': np.random.randint(0, 10000, size=200000),
+    'val1': np.random.randn(200000),
+    'val2': np.random.randn(200000)
+})
+
+df2 = pd.DataFrame({
+    'key': np.random.randint(0, 10000, size=100000),
+    'extra': np.random.randn(100000)
+})
+
+# Merge triggers substantial memory peak
+merged = df1.merge(df2, on='key', how='inner')
+grouped = merged.groupby('key').mean()
+print(f"Data merged: {merged.shape}, Grouped: {grouped.shape}")
+`,
+      generator: `# Eager List Comprehension vs Lazy Generator
+# Demonstrates how generators drastically minimize memory consumption
+
+def eager_list():
+    # Allocates full list of 500,000 integers in memory
+    return [x * 2 for x in range(500000)]
+
+def lazy_generator():
+    # Lazy yield uses almost zero memory footprint
+    return (x * 2 for x in range(500000))
+
+# 1. Test eager
+print("Testing eager list...")
+res1 = sum(eager_list())
+
+# 2. Test lazy
+print("Testing lazy generator...")
+res2 = sum(lazy_generator())
+print(f"Results match: {res1 == res2}")
+`,
+      recursion: `# Deep Recursive Call Stack
+def fib_tree(n):
+    if n <= 1:
+        return [n]
+    return fib_tree(n - 1) + fib_tree(n - 2)
+
+res = fib_tree(14)
+print(f"Recursive nodes generated: {len(res)}")
+`
+    };
+
+    let currentSession = null;
+
+    // Initialize
+    window.addEventListener('DOMContentLoaded', () => {
+      loadPreset('leak');
+      loadSessions();
+    });
+
+    function loadPreset(key) {
+      if (PRESETS[key]) {
+        document.getElementById('code-editor').value = PRESETS[key];
+      }
+    }
+
+    function clearEditor() {
+      document.getElementById('code-editor').value = '';
+    }
+
+    function showToast(text, type = 'success') {
+      const toast = document.getElementById('toast');
+      const toastText = document.getElementById('toast-text');
+      const toastIcon = document.getElementById('toast-icon');
+
+      toastText.innerText = text;
+      if (type === 'error') {
+        toastIcon.className = 'fa-solid fa-circle-exclamation text-rose-400';
+      } else {
+        toastIcon.className = 'fa-solid fa-circle-check text-emerald-400';
+      }
+
+      toast.classList.remove('translate-y-20', 'opacity-0');
+      setTimeout(() => {
+        toast.classList.add('translate-y-20', 'opacity-0');
+      }, 3500);
+    }
+
+    // Run Profile
+    async function runProfile() {
+      const code = document.getElementById('code-editor').value.trim();
+      if (!code) {
+        showToast('Please enter some Python code to profile.', 'error');
+        return;
+      }
+
+      const btn = document.getElementById('btn-run-profile');
+      btn.disabled = true;
+      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Profiling Memory...`;
+      document.getElementById('status-indicator').innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span> Profiling...`;
+
+      const native = document.getElementById('opt-native').checked;
+      const allocators = document.getElementById('opt-allocators').checked;
+
+      try {
+        const res = await fetch('/api/profile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            code: code,
+            name: `Run (${new Date().toLocaleTimeString()})`,
+            native: native,
+            trace_python_allocators: allocators
+          })
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Profiling failed');
+
+        currentSession = data;
+        displaySession(data);
+        showToast(`Profile finished! Peak: ${data.peak_memory_human}`);
+        loadSessions();
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<i class="fa-solid fa-play"></i> Profile Memory`;
+        document.getElementById('status-indicator').innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500"></span> Ready`;
+      }
+    }
+
+    // Handle Upload (.py or .bin)
+    async function handleFileUpload(files) {
+      if (!files || !files.length) return;
+      const file = files[0];
+      const formData = new FormData();
+      formData.append('file', file);
+
+      showToast(`Uploading and analyzing ${file.name}...`);
+      try {
+        const res = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Upload failed');
+
+        currentSession = data;
+        displaySession(data);
+        showToast(`Loaded ${file.name}! Peak: ${data.peak_memory_human}`);
+        loadSessions();
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        document.getElementById('file-upload-input').value = '';
+      }
+    }
+
+    function displaySession(session) {
+      document.getElementById('metrics-bar').classList.remove('hidden');
+      document.getElementById('metric-peak').innerText = session.peak_memory_human || '0 B';
+      document.getElementById('metric-allocs').innerText = (session.total_allocations || 0).toLocaleString();
+      document.getElementById('metric-time').innerText = `${session.elapsed_seconds || 0}s`;
+
+      document.getElementById('dl-flame').href = `/reports/${session.id}/download/flamegraph`;
+      document.getElementById('dl-bin').href = `/reports/${session.id}/download/bin`;
+
+      // Load flamegraph iframe
+      if (session.has_flamegraph) {
+        document.getElementById('empty-flame').classList.add('hidden');
+        document.getElementById('iframe-flame').src = `/reports/${session.id}/flamegraph?v=${Date.now()}`;
+      } else {
+        document.getElementById('empty-flame').classList.remove('hidden');
+      }
+
+      // Load table iframe
+      if (session.has_table) {
+        document.getElementById('empty-table').classList.add('hidden');
+        document.getElementById('iframe-table').src = `/reports/${session.id}/table?v=${Date.now()}`;
+      } else {
+        document.getElementById('empty-table').classList.remove('hidden');
+      }
+
+      // Populate Stats
+      const stats = session.stats || {};
+      const topAllocs = stats.top_allocations_by_size || [];
+      const topList = document.getElementById('top-alloc-size-list');
+      if (topAllocs.length) {
+        topList.innerHTML = topAllocs.map(a => `
+          <div class="flex items-center justify-between p-2 rounded bg-slate-950 border border-bordercol">
+            <span class="truncate max-w-[280px] text-slate-300" title="${a.location}">${a.location}</span>
+            <span class="text-orange-400 font-bold">${formatBytes(a.size)}</span>
+          </div>
+        `).join('');
+      } else {
+        topList.innerHTML = '<span class="text-slate-500 italic">No allocation sites found</span>';
+      }
+
+      const dist = stats.allocator_type_distribution || {};
+      const distList = document.getElementById('allocator-dist-list');
+      if (Object.keys(dist).length) {
+        distList.innerHTML = Object.entries(dist).map(([k, v]) => `
+          <div class="flex items-center justify-between p-2 rounded bg-slate-950 border border-bordercol">
+            <span class="text-slate-300">${k}</span>
+            <span class="text-cyan-400 font-bold">${v.toLocaleString()} calls</span>
+          </div>
+        `).join('');
+      } else {
+        distList.innerHTML = '<span class="text-slate-500 italic">No allocator stats</span>';
+      }
+
+      document.getElementById('raw-stats-json').innerText = JSON.stringify(stats, null, 2);
+
+      // Console
+      document.getElementById('summary-output').innerText = session.summary || 'No summary generated.';
+      document.getElementById('stdout-output').innerText = session.stdout ? `STDOUT:\n${session.stdout}` : '';
+      document.getElementById('stderr-output').innerText = session.stderr ? `STDERR:\n${session.stderr}` : '';
+    }
+
+    function formatBytes(bytes) {
+      if (!bytes) return '0 B';
+      const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+      const i = parseInt(Math.floor(Math.log(bytes) / Math.log(1024)), 10);
+      return `${(bytes / Math.pow(1024, i)).toFixed(2)} ${sizes[i]}`;
+    }
+
+    // Tab Switching
+    function switchTab(tab) {
+      ['flame', 'table', 'stats', 'console'].forEach(t => {
+        const pane = document.getElementById(`pane-${t}`);
+        const btn = document.getElementById(`tab-btn-${t}`);
+        if (t === tab) {
+          pane.classList.remove('hidden');
+          btn.className = 'py-2.5 px-4 text-xs font-semibold border-b-2 border-orange-500 text-orange-400 flex items-center gap-2';
+        } else {
+          pane.classList.add('hidden');
+          btn.className = 'py-2.5 px-4 text-xs font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2';
+        }
+      });
+    }
+
+    // Sessions & History
+    async function loadSessions() {
+      try {
+        const res = await fetch('/api/sessions');
+        const list = await res.json();
+        document.getElementById('history-badge').innerText = list.length;
+        const container = document.getElementById('history-list');
+        container.innerHTML = '';
+
+        if (!list.length) {
+          container.innerHTML = `<div class="text-xs text-slate-500 text-center py-6">No profiling sessions yet.</div>`;
+          return;
+        }
+
+        list.forEach(s => {
+          const item = document.createElement('div');
+          item.className = 'p-3 rounded-xl bg-slate-900 border border-bordercol hover:border-orange-500/50 cursor-pointer transition flex flex-col gap-1.5';
+          item.innerHTML = `
+            <div class="flex items-center justify-between text-xs font-semibold text-white">
+              <span class="truncate max-w-[170px]">${s.name}</span>
+              <span class="text-orange-400 font-mono">${s.peak_memory_human || '0 B'}</span>
+            </div>
+            <div class="flex items-center justify-between text-[11px] text-slate-500">
+              <span>${s.created_at || ''}</span>
+              <button onclick="event.stopPropagation(); deleteSession('${s.id}')" class="text-slate-500 hover:text-rose-400">
+                <i class="fa-solid fa-trash-can"></i>
+              </button>
+            </div>
+          `;
+          item.onclick = () => {
+            currentSession = s;
+            displaySession(s);
+            toggleHistoryDrawer();
+          };
+          container.appendChild(item);
+        });
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function deleteSession(id) {
+      if (!confirm('Delete this profiling run?')) return;
+      try {
+        await fetch(`/api/sessions/${id}`, { method: 'DELETE' });
+        showToast('Run deleted');
+        loadSessions();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    function toggleHistoryDrawer() {
+      const drawer = document.getElementById('history-drawer');
+      drawer.classList.toggle('translate-x-full');
+    }
+  </script>
+</body>
+</html>

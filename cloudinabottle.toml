@@ -1,0 +1,20 @@
+[app]
+name = "memray"
+version = "1.20.0"
+title = "Memray Web Studio"
+description = "Interactive memory profiler and flamegraph visualizer for Python powered by Bloomberg Memray"
+
+[runtime.container]
+image = "Dockerfile"
+port = 8080
+
+[routing]
+public_paths = []
+health_check = "/healthz"
+
+[resources]
+memory_mb = 1024
+cpu_cores = 1.0
+
+[data]
+app_data = true
